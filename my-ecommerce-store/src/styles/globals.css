@@ -1,0 +1,26 @@
+/* src/styles/globals.css */
+
+/* Body text */
+body {
+  font-family: 'Nunito Sans', sans-serif;
+}
+
+/* Headings */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Nunito Sans', sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.02em; /* Material 3 Expressive touch */
+}
+
+/* Material 3 Expressive Utility Classes */
+.m3-card {
+  @apply bg-m3-surfaceVariant rounded-[28px] p-6 transition-all duration-300 border-none;
+}
+
+.m3-button-filled {
+  @apply bg-m3-primary text-m3-onPrimary px-6 py-2.5 rounded-full font-semibold transition-all hover:shadow-md active:scale-95;
+}
+
+.m3-button-tonal {
+  @apply bg-m3-secondaryContainer text-m3-onSecondaryContainer px-6 py-2.5 rounded-full font-semibold transition-all hover:bg-black/5 active:scale-95;
+}

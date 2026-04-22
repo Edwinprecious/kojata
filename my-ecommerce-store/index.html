@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kojata E-Commerce</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,300;0,6..12,400;0,6..12,500;0,6..12,600;0,6..12,700;0,6..12,800;0,6..12,900;1,6..12,400;1,6..12,600&display=swap" rel="stylesheet" />
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"Nunito Sans"', 'sans-serif'],
+            },
+            colors: {
+              m3: {
+                primary: '#0061a4',
+                onPrimary: '#ffffff',
+                primaryContainer: '#d1e4ff',
+                onPrimaryContainer: '#001d36',
+                secondary: '#535f70',
+                onSecondary: '#ffffff',
+                secondaryContainer: '#d7e3f7',
+                onSecondaryContainer: '#101c2b',
+                background: '#fdfcff',
+                onBackground: '#1a1c1e',
+                surface: '#fdfcff',
+                surfaceVariant: '#dfe2eb',
+              }
+            }
+          }
+        }
+      }
+    </script>
+  </head>
+  <body class="bg-m3-background text-m3-onBackground antialiased">
+    <div id="root"></div>
+    <script type="module" src="/src/index.jsx"></script>
+  </body>
+</html>
