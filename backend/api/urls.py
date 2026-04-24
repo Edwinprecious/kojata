@@ -14,6 +14,7 @@ urlpatterns = [
     path('profile/', views.UserProfileView.as_view(), name='user-profile'),
     path('verify-email/<str:uidb64>/<str:token>/', views.VerifyEmailView.as_view(), name='verify-email'),
     path('google-auth/', views.google_auth, name='google-auth'),
+    path('change-password/', views.ChangePasswordView.as_view(), name='change-password'),
 
     # Cart Merge Endpoint
     path('merge-cart/', views.merge_cart, name='merge-cart'),

@@ -50,7 +50,7 @@ const SignUp = () => {
         { 
           theme: "outline", 
           size: "large", 
-          width: "380", // Adjusted for your card width
+          width: "280", // Reduced for better mobile fit
           shape: "pill",
           text: "signup_with" 
         }
@@ -106,7 +106,7 @@ const SignUp = () => {
         <h1 className="text-3xl font-black text-blue-950 mb-2">Create Account</h1>
         <p className="text-gray-500 font-bold mb-8 uppercase tracking-widest text-[10px]">Join the ShopWave community</p>
         
-        {/* GOOGLE BUTTON TARGET - Replaces the old static button */}
+        {/* GOOGLE BUTTON TARGET */}
         <div id="googleSignUpBtn" className="flex justify-center mb-6"></div>
         
         <div className="flex items-center my-6">

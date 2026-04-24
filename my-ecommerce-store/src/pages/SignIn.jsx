@@ -21,7 +21,7 @@ const SignIn = () => {
         token: response.credential 
       });
       
-      // FIX: Dispatch the full response data, not just the tokens
+      // Dispatch the full response data, not just the tokens
       dispatch(setCredentials(res.data));
       dispatch(syncCartWithBackend());
       
@@ -45,7 +45,7 @@ const SignIn = () => {
         { 
           theme: "outline", 
           size: "large", 
-          width: "350", 
+          width: "280", // Reduced for better mobile fit
           shape: "pill",
           text: "signin_with" 
         }
@@ -62,7 +62,11 @@ const SignIn = () => {
     try {
       const response = await axios.post('http://localhost:8000/api/token/', { username, password });
       if (response.data && response.data.access) {
-        dispatch(setCredentials(response.data)); 
+        // Pass the username to the payload so Redux can verify if it's the admin
+        dispatch(setCredentials({ 
+          ...response.data, 
+          user: { username: username } 
+        })); 
         dispatch(syncCartWithBackend());
         toast.success("Welcome back!", { id: loadingToast });
         navigate('/'); 
@@ -121,7 +125,7 @@ const SignIn = () => {
             </div>
           </div>
 
-          <button type="submit" className="m3-button-filled w-full !py-4.5 text-base mt-4 shadow-xl shadow-blue-600/10">
+          <button type="submit" className="w-full bg-blue-600 text-white py-4 mt-4 rounded-xl font-black uppercase text-xs tracking-widest shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all">
             Sign In to ShopWave
           </button>
         </form>

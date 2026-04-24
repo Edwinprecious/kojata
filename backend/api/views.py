@@ -9,7 +9,7 @@ from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from rest_framework import generics, permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny, BasePermission, SAFE_METHODS
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.decorators import api_view, permission_classes
 
@@ -25,16 +25,27 @@ from .serializers import (
     RegisterSerializer
 )
 
-# --- 1. STORE VIEWS ---
-class ProductList(generics.ListAPIView):
-    queryset = Product.objects.all()
-    serializer_class = ProductSerializer
-    permission_classes = [AllowAny]
+# --- CUSTOM PERMISSIONS ---
+class IsAdminOrReadOnly(BasePermission):
+    """
+    Custom permission to only allow admins to edit objects.
+    """
+    def has_permission(self, request, view):
+        if request.method in SAFE_METHODS:
+            return True
+        return bool(request.user and request.user.is_staff)
 
-class ProductDetail(generics.RetrieveAPIView):
+# --- 1. STORE VIEWS ---
+
+class ProductList(generics.ListCreateAPIView):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAdminOrReadOnly]
+
+class ProductDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer
+    permission_classes = [IsAdminOrReadOnly]
 
 class DealList(generics.ListAPIView):
     serializer_class = ProductSerializer
@@ -46,7 +57,6 @@ class CategoryList(generics.ListAPIView):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
     permission_classes = [AllowAny]
-
 
 
 # --- 2. REVIEW VIEWS ---
@@ -67,7 +77,8 @@ class ReviewList(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         # Automatically assign the logged-in user as the author of the review
         serializer.save(user=self.request.user)
-# --- 2. AUTHENTICATION & GOOGLE LOGIN ---
+
+# --- 3. AUTHENTICATION & GOOGLE LOGIN ---
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -153,7 +164,28 @@ class UserProfileView(APIView):
     def get(self, request):
         return Response({"username": request.user.username, "email": request.user.email})
 
-# --- 3. CART MERGING ---
+class ChangePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        old_password = request.data.get("old_password")
+        new_password = request.data.get("new_password")
+
+        # Verify the old password first
+        if not request.user.check_password(old_password):
+            return Response({"error": "Incorrect current password."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Ensure the new password isn't empty
+        if not new_password or len(new_password) < 8:
+            return Response({"error": "Password must be at least 8 characters."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Set and save the new password
+        request.user.set_password(new_password)
+        request.user.save()
+        
+        return Response({"message": "Password updated successfully."}, status=status.HTTP_200_OK)
+
+# --- 4. CART MERGING ---
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])

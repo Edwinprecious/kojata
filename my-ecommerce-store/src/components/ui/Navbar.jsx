@@ -159,9 +159,8 @@ const Navbar = () => {
           <div className="hidden lg:flex items-center border-l pl-4 border-gray-100 gap-4">
             {isAuthenticated ? (
               <>
-                {/* --- DESKTOP ADMIN BUTTON --- */}
                 {isAdmin && (
-                  <Link to="/admin" title="Admin Dashboard" className="p-2 bg-purple-50 text-purple-600 rounded-xl hover:bg-purple-100 transition-all">
+                  <Link to="/admin-dashboard" title="Admin Dashboard" className="p-2 bg-purple-50 text-purple-600 rounded-xl hover:bg-purple-100 transition-all">
                     <Shield size={20} />
                   </Link>
                 )}
@@ -189,10 +188,11 @@ const Navbar = () => {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="absolute top-20 left-0 w-full bg-white shadow-2xl border-t border-gray-100 p-4 lg:hidden flex flex-col gap-4 max-h-[calc(100vh-80px)] overflow-y-auto z-50"
+            // UPDATED: Use 100dvh for better mobile viewport calculation and overscroll-contain
+            className="absolute top-20 left-0 w-full bg-white shadow-2xl border-t border-gray-100 p-4 lg:hidden flex flex-col gap-4 max-h-[calc(100dvh-80px)] overflow-y-auto z-50 overscroll-contain"
           >
             {/* Mobile Search */}
-            <form onSubmit={handleSearch} className="relative w-full mb-2">
+            <form onSubmit={handleSearch} className="relative w-full mb-2 shrink-0">
               <input 
                 type="text"
                 placeholder="Search products..."
@@ -204,7 +204,7 @@ const Navbar = () => {
             </form>
 
             {/* Quick Links */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 shrink-0">
               <Link to="/deals" onClick={closeMenu} className="p-3 text-blue-900 font-bold bg-blue-50 rounded-xl flex items-center justify-center">
                 🔥 Flash Deals
               </Link>
@@ -214,7 +214,7 @@ const Navbar = () => {
             </div>
 
             {/* Mobile Categories Accordion */}
-            <div className="border border-gray-100 rounded-2xl overflow-hidden mt-2 bg-gray-50 flex flex-col">
+            <div className="border border-gray-100 rounded-2xl overflow-hidden mt-2 bg-gray-50 flex flex-col shrink-0">
               <div className="flex items-center justify-between font-bold text-blue-900">
                 <Link 
                   to="/category/all" 
@@ -237,31 +237,33 @@ const Navbar = () => {
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
-                    className="bg-white flex flex-col"
+                    className="bg-white"
                   >
-                    {navCategories.map((cat) => (
-                      <Link 
-                        key={cat.slug}
-                        to={`/category/${cat.slug}`}
-                        onClick={closeMenu}
-                        className="p-4 border-t border-gray-50 flex items-center gap-3 text-sm font-semibold hover:bg-blue-50 transition-colors"
-                      >
-                        <span className={`${cat.color} bg-gray-50 p-2 rounded-lg`}>{cat.icon}</span>
-                        {cat.name}
-                      </Link>
-                    ))}
+                    {/* UPDATED: Added an inner wrapper with max-height and overflow-y-auto to allow scrolling without breaking framer-motion */}
+                    <div className="flex flex-col max-h-60 overflow-y-auto overscroll-contain">
+                      {navCategories.map((cat) => (
+                        <Link 
+                          key={cat.slug}
+                          to={`/category/${cat.slug}`}
+                          onClick={closeMenu}
+                          className="p-4 border-t border-gray-50 flex items-center gap-3 text-sm font-semibold hover:bg-blue-50 transition-colors"
+                        >
+                          <span className={`${cat.color} bg-gray-50 p-2 rounded-lg`}>{cat.icon}</span>
+                          {cat.name}
+                        </Link>
+                      ))}
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
 
             {/* Mobile Auth */}
-            <div className="mt-4 pt-4 border-t border-gray-100 flex flex-col gap-3 pb-6">
+            <div className="mt-4 pt-4 border-t border-gray-100 flex flex-col gap-3 pb-6 shrink-0">
               {isAuthenticated ? (
                 <>
-                  {/* --- MOBILE ADMIN BUTTON --- */}
                   {isAdmin && (
-                    <Link to="/admin" onClick={closeMenu} className="p-4 bg-purple-50 rounded-2xl font-bold flex justify-center items-center gap-2 text-purple-700">
+                    <Link to="/admin-dashboard" onClick={closeMenu} className="p-4 bg-purple-50 rounded-2xl font-bold flex justify-center items-center gap-2 text-purple-700">
                       <Shield size={18} /> Admin Dashboard
                     </Link>
                   )}

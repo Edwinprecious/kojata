@@ -1,4 +1,6 @@
-/* src/styles/globals.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 /* Body text */
 body {
@@ -10,6 +12,11 @@ h1, h2, h3, h4, h5, h6 {
   font-family: 'Nunito Sans', sans-serif;
   font-weight: 800;
   letter-spacing: -0.02em; /* Material 3 Expressive touch */
+}
+
+/* --- FIX FOR INVISIBLE CURSORS ON FORMS --- */
+input, textarea, select {
+  @apply caret-blue-600; 
 }
 
 /* Material 3 Expressive Utility Classes */

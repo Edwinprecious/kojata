@@ -1,45 +1,96 @@
-import React, { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-// Icons imported to prevent "ReferenceError"
-import { Filter, ChevronDown, Star, ShoppingCart, ArrowRight } from 'lucide-react';
-import { products } from '../data/products';
+import { Filter, ChevronDown, Star, SearchX, ShoppingCart } from 'lucide-react';
+import api from '../services/api';
 
 const CategoryPage = () => {
   const { slug } = useParams();
+  const location = useLocation();
   
-  // 1. Logic to handle "all" categories or undefined slugs
+  const queryParams = new URLSearchParams(location.search);
+  const searchQuery = queryParams.get('search') || '';
+  
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        const [prodRes, catRes] = await Promise.all([
+          api.get('/products/'),
+          api.get('/categories/')
+        ]);
+        
+        setProducts(Array.isArray(prodRes.data) ? prodRes.data : (prodRes.data?.results || []));
+        setCategories(Array.isArray(catRes.data) ? catRes.data : (catRes.data?.results || []));
+      } catch (error) {
+        console.error("Error fetching store data:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, []);
+
   const isAll = !slug || slug === 'all';
-  const categoryTitle = isAll 
+  
+  let categoryTitle = isAll 
     ? "All Collections" 
     : slug.charAt(0).toUpperCase() + slug.slice(1);
+
+  if (searchQuery) categoryTitle = `Search: "${searchQuery}"`;
   
-  // 2. Filter products based on the slug
-  const filteredProducts = isAll 
-    ? products 
-    : products.filter(p => p.category.toLowerCase() === slug.toLowerCase());
+  const filteredProducts = products.filter(p => {
+    let matchesCategory = isAll;
+    if (!isAll) {
+      const categoryObj = categories.find(c => {
+        const prodCatId = typeof p.category === 'object' ? p.category.id : p.category;
+        return c.id === prodCatId;
+      });
+      const catName = categoryObj ? categoryObj.name.toLowerCase() : '';
+      const embeddedCatName = typeof p.category === 'object' && p.category.name 
+        ? p.category.name.toLowerCase() 
+        : '';
+
+      matchesCategory = catName === slug.toLowerCase() || embeddedCatName === slug.toLowerCase();
+    }
+
+    let matchesSearch = true;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      matchesSearch = p.name?.toLowerCase().includes(q) || p.description?.toLowerCase().includes(q);
+    }
+
+    return matchesCategory && matchesSearch;
+  });
+
+  const getCategoryName = (productCat) => {
+    if (typeof productCat === 'object') return productCat.name;
+    const cat = categories.find(c => c.id === productCat);
+    return cat ? cat.name : 'Product';
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-6 pb-20 pt-10 font-sans">
       
       {/* Header Section */}
       <header className="flex flex-col md:flex-row md:items-end justify-between mb-16 gap-8">
-        <motion.div 
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-        >
-          <p className="text-blue-600 font-black text-xs uppercase tracking-[0.2em] mb-3">
-            ShopWave Exclusive
-          </p>
+        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
+          <p className="text-blue-600 font-black text-xs uppercase tracking-[0.2em] mb-3">ShopWave Exclusive</p>
           <h1 className="text-4xl md:text-6xl font-extrabold text-blue-950 tracking-tighter">
             {categoryTitle}
           </h1>
           <p className="text-gray-400 mt-4 max-w-md text-sm font-semibold">
-            Discover our curated selection of premium {isAll ? 'goods' : slug} designed for the modern lifestyle.
+            {searchQuery 
+              ? `Showing results matching your search.`
+              : `Discover our curated selection of premium ${isAll ? 'goods' : slug} designed for the modern lifestyle.`}
           </p>
         </motion.div>
         
-        {/* Filter/Sort Controls */}
         <div className="flex items-center gap-3">
           <button className="flex items-center text-[10px] font-black uppercase tracking-widest border border-gray-100 px-6 py-3 rounded-full hover:bg-gray-50 transition-all">
             <Filter size={14} className="mr-2" /> Filters
@@ -51,70 +102,75 @@ const CategoryPage = () => {
       </header>
 
       {/* Product Grid */}
-      {filteredProducts.length === 0 ? (
+      {isLoading ? (
+        <div className="py-32 flex flex-col items-center justify-center">
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+          <p className="text-blue-900 font-bold uppercase tracking-widest text-xs">Loading Products...</p>
+        </div>
+      ) : filteredProducts.length === 0 ? (
         <div className="py-32 text-center">
-          <p className="text-gray-400 font-bold text-lg">No products found in this category.</p>
-          <Link to="/category/all" className="text-blue-600 font-black underline mt-4 block">View All Products</Link>
+          <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto text-gray-300 mb-4">
+            <SearchX size={40} />
+          </div>
+          <p className="text-gray-400 font-bold text-lg">No products found for this criteria.</p>
+          <Link to="/category/all" className="text-blue-600 font-black underline mt-4 block hover:text-blue-700 transition-colors">
+            View All Products
+          </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-8 gap-y-12">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredProducts.map((product, index) => (
             <motion.div 
               key={product.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
-              className="group"
             >
-              {/* Material 3 Card Style */}
-              <Link to={`/product/${product.id}`} className="block">
-                <div className="m3-card !p-0 overflow-hidden relative mb-5">
-                  {/* High-end 4:5 Aspect Ratio */}
-                  <div className="aspect-[4/5] overflow-hidden bg-gray-50">
+              {/* RESTYLED PREMIUM CARD */}
+              <Link to={`/product/${product.id}`} className="block group relative bg-white rounded-[2rem] p-3 border border-gray-100 hover:border-blue-100 hover:shadow-2xl hover:shadow-blue-900/10 transition-all duration-500">
+                
+                {/* Image Container */}
+                <div className="aspect-[4/5] overflow-hidden rounded-3xl bg-gray-50 relative">
+                  {product.image ? (
                     <img 
                       src={product.image} 
                       alt={product.name} 
                       className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                     />
-                  </div>
-                  
-                  {/* Quick Add Overlay (Desktop) */}
-                  <div className="absolute inset-x-4 bottom-4 translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
-                    <div className="m3-button-filled !py-3 !text-xs w-full shadow-2xl">
-                      Quick View <ArrowRight size={14} />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-300 font-bold text-xs uppercase tracking-widest">
+                      No Image
                     </div>
+                  )}
+                  
+                  {/* Floating Action Button on Hover */}
+                  <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 transition-all duration-300 z-10">
+                    <button 
+                      onClick={(e) => { e.preventDefault(); /* Prevent Link navigation */ /* Add to cart logic here */ }}
+                      className="w-12 h-12 bg-white text-blue-900 rounded-full flex items-center justify-center shadow-lg hover:bg-blue-600 hover:text-white transition-colors"
+                    >
+                      <ShoppingCart size={18} />
+                    </button>
                   </div>
                 </div>
 
-                {/* Product Info */}
-                <div className="px-1 space-y-1">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="text-sm font-extrabold text-blue-950 group-hover:text-blue-600 transition-colors">
-                        {product.name}
-                      </h3>
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">
-                        {product.category}
-                      </p>
+                {/* Details Container */}
+                <div className="pt-5 px-3 pb-2 flex flex-col gap-1">
+                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                    {getCategoryName(product.category)}
+                  </p>
+                  
+                  <h3 className="text-sm font-extrabold text-blue-950 group-hover:text-blue-600 transition-colors line-clamp-1">
+                    {product.name}
+                  </h3>
+                  
+                  <div className="flex justify-between items-center mt-2">
+                    <p className="text-lg font-black text-blue-900">${product.price}</p>
+                    
+                    <div className="flex items-center text-yellow-400 bg-yellow-50 px-2 py-1 rounded-full">
+                      <Star size={10} fill="currentColor" className="mr-1" />
+                      <span className="text-[10px] font-black text-yellow-700">{product.rating || "New"}</span>
                     </div>
-                    <p className="text-sm font-black text-blue-900">${product.price}</p>
-                  </div>
-
-                  {/* Rating */}
-                  <div className="flex items-center pt-2">
-                    <div className="flex text-yellow-400">
-                      {[...Array(5)].map((_, i) => (
-                        <Star 
-                          key={i} 
-                          size={10} 
-                          fill={i < Math.floor(product.rating) ? "currentColor" : "none"} 
-                          className="mr-0.5"
-                        />
-                      ))}
-                    </div>
-                    <span className="text-[9px] font-black text-gray-300 ml-2 uppercase">
-                      {product.reviews} reviews
-                    </span>
                   </div>
                 </div>
               </Link>
