@@ -3,8 +3,6 @@ from django.contrib.auth.models import User
 from .models import Category, Product, Order, OrderItem, Review
 from rest_framework.validators import UniqueValidator
 
-
-
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
@@ -17,10 +15,29 @@ class UserSerializer(serializers.ModelSerializer):
 
 class ProductSerializer(serializers.ModelSerializer):
     category_name = serializers.ReadOnlyField(source='category.name')
+    price = serializers.SerializerMethodField()
+    original_price = serializers.SerializerMethodField()
     
     class Meta:
         model = Product
         fields = '__all__'
+        
+    def get_price(self, obj):
+        # Failsafe: Default to 0 if the database returns None
+        base = obj.base_price or 0
+        discount = obj.discount_percentage or 0
+        
+        if discount > 0:
+            discount_amount = (base * discount) / 100
+            return round(base - discount_amount, 2)
+        return base
+
+    def get_original_price(self, obj):
+        # Failsafe: Default to 0 if the database returns None
+        discount = obj.discount_percentage or 0
+        if discount > 0:
+            return obj.base_price or 0
+        return None
 
 class ReviewSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)

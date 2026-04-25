@@ -25,16 +25,18 @@ const Profile = () => {
   const [isEditingPassword, setIsEditingPassword] = useState(false);
   const [passwords, setPasswords] = useState({ current: '', new: '', confirm: '' });
   
-  const { token, isAuthenticated } = useSelector((state) => state.auth);
+  const { token, isAuthenticated, isAdmin } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
   const menuItems = [
     { id: 'overview', label: 'Overview', icon: <User size={20} /> },
-    { id: 'orders', label: 'My Orders', icon: <Package size={20} /> },
-    { id: 'wishlist', label: 'Wishlist', icon: <Heart size={20} /> },
-    { id: 'addresses', label: 'Addresses', icon: <MapPin size={20} /> },
-    { id: 'payments', label: 'Payments', icon: <CreditCard size={20} /> },
+    ...(!isAdmin ? [
+      { id: 'orders', label: 'My Orders', icon: <Package size={20} /> },
+      { id: 'wishlist', label: 'Wishlist', icon: <Heart size={20} /> },
+      { id: 'addresses', label: 'Addresses', icon: <MapPin size={20} /> },
+      { id: 'payments', label: 'Payments', icon: <CreditCard size={20} /> },
+    ] : []),
     { id: 'settings', label: 'Settings', icon: <Settings size={20} /> },
   ];
 
@@ -54,9 +56,10 @@ const Profile = () => {
         const fetchedUser = response.data;
         setUser({ username: fetchedUser.username, email: fetchedUser.email });
         
-        // Load saved profile picture from local storage for this specific user
-        const savedImage = localStorage.getItem(`profilePic_${fetchedUser.username}`);
-        if (savedImage) setProfileImage(savedImage);
+        // Use the image URL coming from the Django backend!
+        if (fetchedUser.profile_image) {
+          setProfileImage(fetchedUser.profile_image);
+        }
         
         setIsLoading(false);
       } catch (error) {
@@ -76,18 +79,29 @@ const Profile = () => {
 
   // --- Handlers ---
   
-  const handleImageUpload = (e) => {
+  const handleImageUpload = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64String = reader.result;
-        setProfileImage(base64String);
-        // Save to local storage so it persists across refreshes
-        localStorage.setItem(`profilePic_${user.username}`, base64String);
-        toast.success("Profile picture updated!");
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    const loadingToast = toast.loading("Uploading image...");
+    
+    // Package the file for the Django backend
+    const formData = new FormData();
+    formData.append('profile_image', file);
+
+    try {
+      const response = await api.patch('/profile/', formData, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data' // Required for file uploads
+        }
+      });
+      
+      // Update UI with the new URL returned from Django
+      setProfileImage(response.data.profile_image);
+      toast.success("Profile picture updated!", { id: loadingToast });
+    } catch (error) {
+      toast.error("Failed to upload image.", { id: loadingToast });
     }
   };
 
@@ -182,7 +196,7 @@ const Profile = () => {
               <p className="text-sm font-bold text-gray-400 truncate mb-4">{user.email}</p>
               
               <div className="inline-flex items-center text-[10px] font-black uppercase tracking-widest text-green-600 bg-green-50 px-3 py-1.5 rounded-full">
-                Active Member
+                {isAdmin ? 'Administrator' : 'Active Member'}
               </div>
             </div>
 
@@ -226,22 +240,25 @@ const Profile = () => {
                       <p className="text-gray-400 font-bold">Manage your profile and recent activity</p>
                     </header>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="p-8 bg-blue-50/50 rounded-[2rem] border border-blue-100">
-                        <div className="flex items-center gap-4 mb-4">
-                          <div className="p-3 bg-white rounded-xl text-blue-600 shadow-sm"><Package size={20} /></div>
-                          <span className="font-black text-xs uppercase tracking-widest text-blue-900">Total Orders</span>
+                    {/* Hide empty shopping stats from Admins */}
+                    {!isAdmin && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="p-8 bg-blue-50/50 rounded-[2rem] border border-blue-100">
+                          <div className="flex items-center gap-4 mb-4">
+                            <div className="p-3 bg-white rounded-xl text-blue-600 shadow-sm"><Package size={20} /></div>
+                            <span className="font-black text-xs uppercase tracking-widest text-blue-900">Total Orders</span>
+                          </div>
+                          <p className="text-4xl font-black text-blue-950">0</p>
                         </div>
-                        <p className="text-4xl font-black text-blue-950">0</p>
-                      </div>
-                      <div className="p-8 bg-blue-50/50 rounded-[2rem] border border-blue-100">
-                        <div className="flex items-center gap-4 mb-4">
-                          <div className="p-3 bg-white rounded-xl text-red-500 shadow-sm"><Heart size={20} /></div>
-                          <span className="font-black text-xs uppercase tracking-widest text-blue-900">Saved Items</span>
+                        <div className="p-8 bg-blue-50/50 rounded-[2rem] border border-blue-100">
+                          <div className="flex items-center gap-4 mb-4">
+                            <div className="p-3 bg-white rounded-xl text-red-500 shadow-sm"><Heart size={20} /></div>
+                            <span className="font-black text-xs uppercase tracking-widest text-blue-900">Saved Items</span>
+                          </div>
+                          <p className="text-4xl font-black text-blue-950">0</p>
                         </div>
-                        <p className="text-4xl font-black text-blue-950">0</p>
                       </div>
-                    </div>
+                    )}
 
                     <section className="space-y-4 pt-4">
                       <h3 className="font-black text-blue-950 uppercase text-xs tracking-[0.2em] mb-6">Recent Activity</h3>
@@ -253,7 +270,7 @@ const Profile = () => {
                 )}
 
                 {/* --- ORDERS TAB --- */}
-                {activeTab === 'orders' && (
+                {!isAdmin && activeTab === 'orders' && (
                   <div className="space-y-6">
                      <h1 className="text-3xl font-black text-blue-950">Order History</h1>
                      <div className="p-16 md:p-20 text-center space-y-4 bg-gray-50/50 rounded-[2rem] border border-gray-100 mt-6">
@@ -273,7 +290,7 @@ const Profile = () => {
                 )}
 
                 {/* --- WISHLIST TAB --- */}
-                {activeTab === 'wishlist' && (
+                {!isAdmin && activeTab === 'wishlist' && (
                   <div className="space-y-6">
                      <h1 className="text-3xl font-black text-blue-950">My Wishlist</h1>
                      <div className="p-16 md:p-20 text-center space-y-4 bg-gray-50/50 rounded-[2rem] border border-gray-100 mt-6">
@@ -293,7 +310,7 @@ const Profile = () => {
                 )}
 
                 {/* --- ADDRESSES TAB --- */}
-                {activeTab === 'addresses' && (
+                {!isAdmin && activeTab === 'addresses' && (
                   <div className="space-y-6">
                      <div className="flex justify-between items-center mb-6">
                        <h1 className="text-3xl font-black text-blue-950">Saved Addresses</h1>
@@ -312,7 +329,7 @@ const Profile = () => {
                 )}
 
                 {/* --- PAYMENTS TAB --- */}
-                {activeTab === 'payments' && (
+                {!isAdmin && activeTab === 'payments' && (
                   <div className="space-y-6">
                      <div className="flex justify-between items-center mb-6">
                        <h1 className="text-3xl font-black text-blue-950">Payment Methods</h1>

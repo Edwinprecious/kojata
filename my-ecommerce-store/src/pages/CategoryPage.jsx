@@ -1,12 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useLocation } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
 import { motion } from 'framer-motion';
 import { Filter, ChevronDown, Star, SearchX, ShoppingCart } from 'lucide-react';
+import { addToCart } from '../features/cart/CartSlice';
+import toast from 'react-hot-toast';
 import api from '../services/api';
 
 const CategoryPage = () => {
   const { slug } = useParams();
   const location = useLocation();
+  const dispatch = useDispatch();
+  
+  // Get isAdmin from auth state
+  const { isAdmin } = useSelector(state => state.auth);
   
   const queryParams = new URLSearchParams(location.search);
   const searchQuery = queryParams.get('search') || '';
@@ -126,7 +133,6 @@ const CategoryPage = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
             >
-              {/* RESTYLED PREMIUM CARD */}
               <Link to={`/product/${product.id}`} className="block group relative bg-white rounded-[2rem] p-3 border border-gray-100 hover:border-blue-100 hover:shadow-2xl hover:shadow-blue-900/10 transition-all duration-500">
                 
                 {/* Image Container */}
@@ -143,15 +149,32 @@ const CategoryPage = () => {
                     </div>
                   )}
                   
-                  {/* Floating Action Button on Hover */}
-                  <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 transition-all duration-300 z-10">
-                    <button 
-                      onClick={(e) => { e.preventDefault(); /* Prevent Link navigation */ /* Add to cart logic here */ }}
-                      className="w-12 h-12 bg-white text-blue-900 rounded-full flex items-center justify-center shadow-lg hover:bg-blue-600 hover:text-white transition-colors"
-                    >
-                      <ShoppingCart size={18} />
-                    </button>
-                  </div>
+                  {/* Floating Action Button on Hover - HIDDEN FOR ADMINS */}
+                  {!isAdmin && product.stock > 0 && (
+                    <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 transition-all duration-300 z-10">
+                      <button 
+                        onClick={(e) => { 
+                          e.preventDefault(); 
+                          dispatch(addToCart({ ...product, quantity: 1 }));
+                          toast.success(`${product.name} added to cart!`, {
+                            icon: '🛒',
+                            style: { borderRadius: '16px', fontWeight: '800' }
+                          });
+                        }}
+                        className="w-12 h-12 bg-white text-blue-900 rounded-full flex items-center justify-center shadow-lg hover:bg-blue-600 hover:text-white transition-colors"
+                      >
+                        <ShoppingCart size={18} />
+                      </button>
+                    </div>
+                  )}
+
+                  {!isAdmin && product.stock <= 0 && (
+                    <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 transition-all duration-300 z-10">
+                      <div className="w-12 h-12 bg-gray-200 text-gray-400 rounded-full flex items-center justify-center shadow-lg cursor-not-allowed">
+                        <SearchX size={18} />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Details Container */}

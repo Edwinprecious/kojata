@@ -1,3 +1,4 @@
+// src/components/ui/Navbar.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -6,7 +7,8 @@ import { logout } from '../../features/auth/authSlice';
 import { 
   ShoppingCart, Video, Search, ChevronDown, 
   Menu, X, Laptop, ShoppingBag, 
-  Watch, Home as HomeIcon, LogOut, User, Sparkles, Grid, Shield
+  Watch, Home as HomeIcon, LogOut, User, Sparkles, Grid, Shield,
+  Footprints 
 } from 'lucide-react';
 import { toggleCart } from '../../features/cart/CartSlice';
 import toast from 'react-hot-toast';
@@ -19,7 +21,6 @@ const Navbar = () => {
   
   const dropdownRef = useRef(null);
 
-  // Extract both isAuthenticated and isAdmin from the auth slice
   const { isAuthenticated, isAdmin } = useSelector((state) => state.auth);
   const { items } = useSelector(state => state.cart);
   const dispatch = useDispatch();
@@ -57,6 +58,7 @@ const Navbar = () => {
     { name: 'Accessories', slug: 'accessories', icon: <Watch size={16}/>, color: 'text-blue-500' },
     { name: 'Home & Decor', slug: 'home', icon: <HomeIcon size={16}/>, color: 'text-green-500' },
     { name: 'Beauty', slug: 'beauty', icon: <Sparkles size={16}/>, color: 'text-purple-500' },
+    { name: 'Footwear', slug: 'footwear', icon: <Footprints size={16}/>, color: 'text-gray-500' },
   ];
 
   const closeMenu = () => {
@@ -99,6 +101,11 @@ const Navbar = () => {
         <div className="flex items-center space-x-3">
           <div className="hidden lg:flex items-center space-x-6 text-sm font-bold text-gray-600 mr-4">
             
+            {/* ADDED HOME LINK HERE */}
+            <Link to="/" className="hover:text-blue-600 transition-colors flex items-center gap-1.5">
+              <HomeIcon size={16} /> Home
+            </Link>
+
             <div 
               className="relative py-2" 
               onMouseEnter={() => setIsCategoryOpen(true)}
@@ -147,14 +154,16 @@ const Navbar = () => {
             </Link>
           </div>
 
-          <button 
-            onClick={() => dispatch(toggleCart())}
-            className="bg-blue-900 text-white px-4 py-2.5 rounded-2xl flex items-center text-sm font-bold shadow-lg shadow-blue-900/10 hover:bg-blue-800 transition-all"
-          >
-            <ShoppingCart size={18} className="md:mr-2"/> 
-            <span className="hidden md:inline">Cart</span>
-            <span className="ml-2 bg-red-500 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black">{items.length}</span>
-          </button>
+          {!isAdmin && (
+            <button 
+              onClick={() => dispatch(toggleCart())}
+              className="bg-blue-900 text-white px-4 py-2.5 rounded-2xl flex items-center text-sm font-bold shadow-lg shadow-blue-900/10 hover:bg-blue-800 transition-all"
+            >
+              <ShoppingCart size={18} className="md:mr-2"/> 
+              <span className="hidden md:inline">Cart</span>
+              <span className="ml-2 bg-red-500 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black">{items.length}</span>
+            </button>
+          )}
 
           <div className="hidden lg:flex items-center border-l pl-4 border-gray-100 gap-4">
             {isAuthenticated ? (
@@ -188,7 +197,6 @@ const Navbar = () => {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            // UPDATED: Use 100dvh for better mobile viewport calculation and overscroll-contain
             className="absolute top-20 left-0 w-full bg-white shadow-2xl border-t border-gray-100 p-4 lg:hidden flex flex-col gap-4 max-h-[calc(100dvh-80px)] overflow-y-auto z-50 overscroll-contain"
           >
             {/* Mobile Search */}
@@ -205,6 +213,10 @@ const Navbar = () => {
 
             {/* Quick Links */}
             <div className="grid grid-cols-2 gap-3 shrink-0">
+              {/* ADDED HOME LINK TO MOBILE MENU */}
+              <Link to="/" onClick={closeMenu} className="p-3 text-blue-900 font-bold bg-blue-50 rounded-xl flex items-center justify-center col-span-2">
+                <HomeIcon size={18} className="mr-2" /> Home
+              </Link>
               <Link to="/deals" onClick={closeMenu} className="p-3 text-blue-900 font-bold bg-blue-50 rounded-xl flex items-center justify-center">
                 🔥 Flash Deals
               </Link>
@@ -239,7 +251,6 @@ const Navbar = () => {
                     exit={{ height: 0, opacity: 0 }}
                     className="bg-white"
                   >
-                    {/* UPDATED: Added an inner wrapper with max-height and overflow-y-auto to allow scrolling without breaking framer-motion */}
                     <div className="flex flex-col max-h-60 overflow-y-auto overscroll-contain">
                       {navCategories.map((cat) => (
                         <Link 

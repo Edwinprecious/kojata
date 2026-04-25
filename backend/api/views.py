@@ -17,7 +17,7 @@ from rest_framework.decorators import api_view, permission_classes
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 
-from .models import Product, Category, Review, Order, OrderItem
+from .models import Product, Category, Review, Order, OrderItem, UserProfile
 from .serializers import (
     ProductSerializer, 
     CategorySerializer, 
@@ -27,9 +27,6 @@ from .serializers import (
 
 # --- CUSTOM PERMISSIONS ---
 class IsAdminOrReadOnly(BasePermission):
-    """
-    Custom permission to only allow admins to edit objects.
-    """
     def has_permission(self, request, view):
         if request.method in SAFE_METHODS:
             return True
@@ -50,32 +47,30 @@ class ProductDetail(generics.RetrieveUpdateDestroyAPIView):
 class DealList(generics.ListAPIView):
     serializer_class = ProductSerializer
     permission_classes = [AllowAny]
+    
     def get_queryset(self):
-        return Product.objects.filter(original_price__isnull=False)
+        # Simply return any product with a discount greater than 0%
+        return Product.objects.filter(discount_percentage__gt=0)
 
-class CategoryList(generics.ListAPIView):
+class CategoryList(generics.ListCreateAPIView):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAdminOrReadOnly]
 
 
 # --- 2. REVIEW VIEWS ---
 
 class ReviewList(generics.ListCreateAPIView):
-    """Handles listing reviews (limited to 6) and posting new ones"""
     serializer_class = ReviewSerializer
-    # Anyone can see reviews, but only logged-in users can post
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def get_queryset(self):
         product_id = self.request.query_params.get('product')
         if product_id:
-            # Return the latest 6 reviews for a specific product
             return Review.objects.filter(product_id=product_id).order_by('-created_at')[:6]
         return Review.objects.all()
 
     def perform_create(self, serializer):
-        # Automatically assign the logged-in user as the author of the review
         serializer.save(user=self.request.user)
 
 # --- 3. AUTHENTICATION & GOOGLE LOGIN ---
@@ -83,11 +78,9 @@ class ReviewList(generics.ListCreateAPIView):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def google_auth(request):
-    """Verifies Google ID Token and returns ShopWave JWTs"""
     token = request.data.get('token')
     
     try:
-        # Verify the token against Google's servers
         idinfo = id_token.verify_oauth2_token(
             token, 
             google_requests.Request(), 
@@ -96,7 +89,6 @@ def google_auth(request):
 
         email = idinfo['email']
         
-        # Find or create user. Google users are pre-verified.
         user, created = User.objects.get_or_create(
             email=email,
             defaults={
@@ -113,7 +105,12 @@ def google_auth(request):
                 "refresh": str(refresh),
                 "access": str(refresh.access_token),
             },
-            "user": {"username": user.username, "email": user.email}
+            # UPDATED: Added is_staff flag here so the frontend knows if it's an admin
+            "user": {
+                "username": user.username, 
+                "email": user.email,
+                "is_staff": user.is_staff
+            }
         }, status=status.HTTP_200_OK)
 
     except ValueError:
@@ -134,7 +131,7 @@ class RegisterView(generics.CreateAPIView):
         verify_url = f"http://localhost:5173/verify-email/{uid}/{token}"
 
         send_mail(
-            "Verify your ShopWave Account", 
+            "Verify your Account", 
             f"Hi {user.username},\n\nPlease verify your email:\n{verify_url}", 
             settings.DEFAULT_FROM_EMAIL, 
             [user.email]
@@ -159,10 +156,33 @@ class VerifyEmailView(APIView):
             }, status=200)
         return Response({"error": "Invalid link"}, status=400)
 
+
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
+    
     def get(self, request):
-        return Response({"username": request.user.username, "email": request.user.email})
+        profile, created = UserProfile.objects.get_or_create(user=request.user)
+        image_url = request.build_absolute_uri(profile.profile_image.url) if profile.profile_image else None
+        
+        return Response({
+            "username": request.user.username, 
+            "email": request.user.email,
+            "profile_image": image_url,
+            # UPDATED: Added is_staff flag here for standard logins fetching profile data
+            "is_staff": request.user.is_staff 
+        })
+        
+    def patch(self, request):
+        profile, created = UserProfile.objects.get_or_create(user=request.user)
+        
+        if 'profile_image' in request.FILES:
+            profile.profile_image = request.FILES['profile_image']
+            profile.save()
+            image_url = request.build_absolute_uri(profile.profile_image.url)
+            return Response({"message": "Profile image updated", "profile_image": image_url}, status=status.HTTP_200_OK)
+            
+        return Response({"error": "No image provided"}, status=status.HTTP_400_BAD_REQUEST)
+
 
 class ChangePasswordView(APIView):
     permission_classes = [IsAuthenticated]
@@ -171,15 +191,12 @@ class ChangePasswordView(APIView):
         old_password = request.data.get("old_password")
         new_password = request.data.get("new_password")
 
-        # Verify the old password first
         if not request.user.check_password(old_password):
             return Response({"error": "Incorrect current password."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Ensure the new password isn't empty
         if not new_password or len(new_password) < 8:
             return Response({"error": "Password must be at least 8 characters."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Set and save the new password
         request.user.set_password(new_password)
         request.user.save()
         

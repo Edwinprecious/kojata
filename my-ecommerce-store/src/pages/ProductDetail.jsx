@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { 
   Heart, Truck, ArrowLeft, 
   Plus, Minus, Star, Share2, MessageSquare, CheckCircle, X,
-  PackageX
+  PackageX, Tag // Added Tag icon
 } from 'lucide-react';
 import { addToCart } from '../features/cart/CartSlice';
 import api from '../services/api';
@@ -15,7 +15,8 @@ const ProductDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const { token, isAuthenticated } = useSelector((state) => state.auth);
+  
+  const { token, isAuthenticated, isAdmin } = useSelector((state) => state.auth);
   
   // Data States
   const [product, setProduct] = useState(null);
@@ -35,12 +36,10 @@ const ProductDetail = () => {
     const fetchProductDetails = async () => {
       setIsLoading(true);
       try {
-        // Fetch specific product
         const prodRes = await api.get(`/products/${id}/`);
         const productData = prodRes.data;
         setProduct(productData);
 
-        // Resolve Category Name
         if (typeof productData.category === 'object') {
           setCategoryName(productData.category.name);
         } else {
@@ -50,7 +49,6 @@ const ProductDetail = () => {
           setCategoryName(matchedCat ? matchedCat.name : 'Store Item');
         }
 
-        // Fetch associated reviews
         const reviewRes = await api.get(`/reviews/?product=${id}`);
         setReviews(Array.isArray(reviewRes.data) ? reviewRes.data : reviewRes.data.results || []);
 
@@ -95,7 +93,6 @@ const ProductDetail = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      // Update local reviews list
       setReviews([response.data, ...reviews]);
       setIsReviewModalOpen(false);
       setUserRating(0);
@@ -129,6 +126,17 @@ const ProductDetail = () => {
     );
   }
 
+  // --- DISCOUNT PARSING LOGIC ---
+  const rawPrice = product.price ?? 0;
+  const rawOriginalPrice = product.original_price ?? product.originalPrice ?? 0;
+
+  const currentPrice = parseFloat(rawPrice) || 0;
+  const originalPrice = parseFloat(rawOriginalPrice) || 0;
+  
+  const hasDiscount = originalPrice > currentPrice && originalPrice > 0;
+  const discountPercentage = product.discount_percentage || (hasDiscount ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) : 0);
+
+
   return (
     <div className="max-w-7xl mx-auto px-6 pt-10 pb-20 font-sans">
       <button 
@@ -138,11 +146,15 @@ const ProductDetail = () => {
         <ArrowLeft size={14} className="mr-2" /> Back to Collection
       </button>
 
-      {/* PRODUCT CONTENT */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-        
-        {/* Product Image */}
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="rounded-[40px] overflow-hidden aspect-square bg-gray-50 border border-gray-100 shadow-sm relative group">
+          {/* Flash Deal Badge */}
+          {hasDiscount && (
+            <div className="absolute top-6 left-6 z-10 bg-orange-200/80 backdrop-blur-md text-orange-800 px-4 py-1.5 rounded-full text-xs font-bold flex items-center shadow-sm">
+              <Tag size={16} className="mr-1.5"/> Flash Deal
+            </div>
+          )}
+
           {product.image ? (
              <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
           ) : (
@@ -150,7 +162,6 @@ const ProductDetail = () => {
           )}
         </motion.div>
 
-        {/* Product Details */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col">
           <div className="flex justify-between items-start mb-4">
             <p className="text-blue-600 font-black text-xs uppercase tracking-widest">{categoryName}</p>
@@ -160,8 +171,22 @@ const ProductDetail = () => {
           <h1 className="text-4xl md:text-6xl mb-6 text-blue-950 font-extrabold tracking-tight leading-tight">{product.name}</h1>
           
           <div className="flex items-center gap-6 mb-10">
-            <p className="text-3xl font-black text-blue-600">${product.price}</p>
+            <div className="flex flex-col">
+              <div className="flex items-center gap-3">
+                <p className="text-3xl font-black text-blue-600">${currentPrice.toFixed(2)}</p>
+                {hasDiscount && (
+                  <span className="bg-red-500 text-white px-2 py-1 rounded-lg text-xs font-black uppercase tracking-wider shadow-sm">
+                    -{discountPercentage}%
+                  </span>
+                )}
+              </div>
+              {hasDiscount && (
+                <p className="text-sm text-gray-400 line-through mt-1">${originalPrice.toFixed(2)}</p>
+              )}
+            </div>
+
             <div className="h-8 w-[1px] bg-gray-100"></div>
+            
             <div className="flex items-center text-yellow-400">
               {[...Array(5)].map((_, i) => (
                 <Star key={i} size={18} fill={i < Math.floor(product.rating || 0) ? "currentColor" : "none"} className="mr-1" />
@@ -177,28 +202,31 @@ const ProductDetail = () => {
             <span>{product.stock > 0 ? `${product.stock} items in stock. Ready to ship.` : "Currently Out of Stock"}</span>
           </div>
 
-          <div className="space-y-6">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center border border-gray-100 rounded-full p-1.5 bg-gray-50/50">
-                <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="p-3 hover:bg-white rounded-full transition-all active:scale-90"><Minus size={18} /></button>
-                <span className="px-8 font-black text-xl text-blue-950">{quantity}</span>
-                <button onClick={() => setQuantity(q => q + 1)} className="p-3 hover:bg-white rounded-full transition-all active:scale-90"><Plus size={18} /></button>
+          {/* HIDDEN FOR ADMINS */}
+          {!isAdmin && (
+            <div className="space-y-6">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center border border-gray-100 rounded-full p-1.5 bg-gray-50/50">
+                  <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="p-3 hover:bg-white rounded-full transition-all active:scale-90"><Minus size={18} /></button>
+                  <span className="px-8 font-black text-xl text-blue-950">{quantity}</span>
+                  {/* CAPPED AT STOCK LIMIT */}
+                  <button onClick={() => setQuantity(q => Math.min(product.stock, q + 1))} className="p-3 hover:bg-white rounded-full transition-all active:scale-90"><Plus size={18} /></button>
+                </div>
+                <button className="p-5 rounded-full border border-gray-100 hover:text-pink-500 transition-all text-gray-400 bg-white shadow-sm hover:shadow-md"><Heart size={24} /></button>
               </div>
-              <button className="p-5 rounded-full border border-gray-100 hover:text-pink-500 transition-all text-gray-400 bg-white shadow-sm hover:shadow-md"><Heart size={24} /></button>
+              
+              <button 
+                onClick={handleAddToCart} 
+                disabled={product.stock <= 0}
+                className={`w-full py-5 rounded-2xl text-lg font-black tracking-widest uppercase transition-all shadow-xl ${product.stock > 0 ? "bg-blue-600 text-white shadow-blue-600/20 hover:bg-blue-700" : "bg-gray-200 text-gray-400 cursor-not-allowed"}`}
+              >
+                {product.stock > 0 ? "Add to Cart" : "Out of Stock"}
+              </button>
             </div>
-            
-            <button 
-              onClick={handleAddToCart} 
-              disabled={product.stock <= 0}
-              className={`w-full py-5 rounded-2xl text-lg font-black tracking-widest uppercase transition-all shadow-xl ${product.stock > 0 ? "bg-blue-600 text-white shadow-blue-600/20 hover:bg-blue-700" : "bg-gray-200 text-gray-400 cursor-not-allowed"}`}
-            >
-              {product.stock > 0 ? "Add to Cart" : "Out of Stock"}
-            </button>
-          </div>
+          )}
         </motion.div>
       </div>
 
-      {/* --- REVIEWS SECTION --- */}
       <section className="mt-32 pt-24 border-t border-gray-100">
         <div className="flex flex-col lg:flex-row gap-16">
           <div className="lg:w-1/3 space-y-8">
@@ -215,21 +243,24 @@ const ProductDetail = () => {
               <p className="text-sm font-bold text-blue-900">Based on {reviews.length} Verified Purchases</p>
             </div>
 
-            <div className="pt-4">
-              <button 
-                onClick={() => {
-                  if(!isAuthenticated) {
-                     toast.error("Please sign in to rate products.");
-                     navigate('/signin');
-                  } else {
-                     setIsReviewModalOpen(true);
-                  }
-                }}
-                className="bg-white border-2 border-blue-600 text-blue-600 hover:bg-blue-50 w-full py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex justify-center items-center transition-colors"
-              >
-                <MessageSquare size={18} className="mr-2" /> Rate your Purchase
-              </button>
-            </div>
+            {/* HIDDEN FOR ADMINS */}
+            {!isAdmin && (
+              <div className="pt-4">
+                <button 
+                  onClick={() => {
+                    if(!isAuthenticated) {
+                       toast.error("Please sign in to rate products.");
+                       navigate('/signin');
+                    } else {
+                       setIsReviewModalOpen(true);
+                    }
+                  }}
+                  className="bg-white border-2 border-blue-600 text-blue-600 hover:bg-blue-50 w-full py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex justify-center items-center transition-colors"
+                >
+                  <MessageSquare size={18} className="mr-2" /> Rate your Purchase
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="lg:w-2/3">
@@ -271,7 +302,6 @@ const ProductDetail = () => {
         </div>
       </section>
 
-      {/* --- RATING MODAL --- */}
       <AnimatePresence>
         {isReviewModalOpen && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
