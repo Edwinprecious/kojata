@@ -19,7 +19,6 @@ const Home = () => {
   const { isLive, title } = useYouTube();
   const [categoryCounts, setCategoryCounts] = useState({});
 
-  // Fetch products and calculate accurate category counts
   useEffect(() => {
     const fetchCategoryCounts = async () => {
       try {
@@ -28,11 +27,8 @@ const Home = () => {
         
         const counts = {};
         products.forEach(p => {
-          // Get the category name from the serializer or nested object
           const catName = p.category_name || (typeof p.category === 'object' ? p.category.name : '');
-          
           if (catName) {
-            // Normalize to gracefully handle "Home & Decor" vs "Home and Decor"
             const normalized = catName.toLowerCase().replace('&', 'and').replace(/\s+/g, ' ').trim();
             counts[normalized] = (counts[normalized] || 0) + 1;
           }
@@ -46,7 +42,6 @@ const Home = () => {
     fetchCategoryCounts();
   }, []);
 
-  // Helper function to match the hardcoded categories with the backend tally
   const normalizeString = (str) => {
     return str.toLowerCase().replace('&', 'and').replace(/\s+/g, ' ').trim();
   };
@@ -54,14 +49,12 @@ const Home = () => {
   return (
     <main className="pt-16 md:pt-20 space-y-12 md:space-y-20 overflow-x-hidden font-caslon">
       
-      {/* 1. HERO SECTION - Responsive Stacked Layout */}
       <Hero />
 
       {/* --- FLASH EVENT BANNER --- */}
       <div className="max-w-7xl mx-auto px-4 md:px-6 mb-16 mt-8">
         <div className="bg-blue-950 text-white rounded-[2.5rem] p-8 md:p-12 flex flex-col md:flex-row items-center justify-between shadow-2xl shadow-blue-900/20 overflow-hidden relative border border-blue-800">
           
-          {/* Abstract Background Elements */}
           <div className="absolute top-0 right-0 w-80 h-80 bg-red-500/20 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/3 pointer-events-none"></div>
           <div className="absolute bottom-0 left-0 w-80 h-80 bg-blue-500/30 rounded-full blur-[80px] translate-y-1/2 -translate-x-1/3 pointer-events-none"></div>
           
@@ -70,7 +63,7 @@ const Home = () => {
               Flash Event
             </div>
             <h2 className="text-4xl md:text-5xl font-black tracking-tight leading-tight">
-              Midnight Sale.<br/>
+              Sale.<br/>
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-pink-500">Up to 60% Off.</span>
             </h2>
             
@@ -91,15 +84,13 @@ const Home = () => {
               to="/deals" 
               className="bg-white text-blue-950 px-8 py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-white/10 hover:scale-105 hover:bg-gray-50 transition-all flex items-center gap-2 group"
             >
-              Explore Tech Deals 
+              Explore Deals 
               <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
             </Link>
           </div>
         </div>
       </div>
-      {/* --------------------------- */}
 
-      {/* 2. STATS SECTION - Responsive Grid */}
       <section className="bg-blue-900 text-white py-12 md:py-16">
         <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12 text-center">
           <div><h2 className="text-3xl md:text-5xl font-bold">2.4M+</h2><p className="text-blue-200 text-xs md:text-sm opacity-70 mt-1">Happy Customers</p></div>
@@ -109,7 +100,6 @@ const Home = () => {
         </div>
       </section>
 
-      {/* 3. CATEGORIES GRID - Responsive 2 to 6 columns */}
       <section className="max-w-7xl mx-auto px-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
           <div>
@@ -129,9 +119,7 @@ const Home = () => {
             { name: 'Beauty', icon: <Sparkles className="text-yellow-500"/> },
             { name: 'Footwear', icon: <Footprints className="text-gray-500"/> },
           ].map((cat, i) => {
-            // Retrieve the dynamically calculated count from state, default to 0
             const actualCount = categoryCounts[normalizeString(cat.name)] || 0;
-
             return (
               <Link 
                 to={`/category/${cat.name.toLowerCase()}`} 
@@ -147,13 +135,9 @@ const Home = () => {
         </div>
       </section>
 
-      {/* 4. LIVE SHOW SECTION */}
       <LiveShowSection />
-
-      {/* 5. TESTIMONIALS SECTION */}
       <Testimonials />
 
-      {/* 6. LIVE ACTIVITY FEED - Responsive Layout */}
       <section className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-3 gap-10 pb-20">
         <div className="lg:col-span-1 space-y-6">
           <p className="text-blue-600 font-bold text-xs md:text-sm uppercase tracking-widest">Live Activity</p>
@@ -178,7 +162,6 @@ const Home = () => {
             <p className="text-[10px] text-gray-400 font-bold uppercase">Updates every few seconds</p>
           </div>
           <div className="space-y-3">
-             {/* Feed Item Template */}
              <div className="bg-white p-5 rounded-2xl border border-gray-100 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex items-center space-x-4">
                   <div className="w-12 h-12 bg-blue-900 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg shadow-blue-900/20">T</div>

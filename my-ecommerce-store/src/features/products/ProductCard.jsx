@@ -1,74 +1,104 @@
 import React from 'react';
-import { ShoppingCart, Star, Tag } from 'lucide-react';
+import { ShoppingCart, Star, Tag, Heart } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
+import { addToCart } from '../cart/CartSlice';
+import { addToWishlist, removeFromWishlist } from '../wishlist/wishlistSlice'; 
+import toast from 'react-hot-toast';
 
 const ProductCard = ({ product = {} }) => {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   
-  // FIX: Destructure isAdmin directly from the auth state
-  const { user, isAdmin } = useSelector((state) => state.auth);
+  const p = product?.product ? product.product : product;
+  
+  const { isAdmin, isAuthenticated } = useSelector((state) => state.auth);
+  const wishlistItems = useSelector((state) => state.wishlist.items); 
+  
+  const isInWishlist = wishlistItems.some(item => item.product?.id === p.id);
 
-  // 1. BULLETPROOF PARSING
-  const rawPrice = product.price ?? 0;
-  const rawOriginalPrice = product.original_price ?? product.originalPrice ?? 0;
-  const rawStock = product.stock ?? product.stock_quantity ?? 0;
+  const rawOriginalPrice = p.original_price ?? p.originalPrice ?? p.base_price ?? 0;
+  
+  let calculatedPrice = p.price;
+  if (calculatedPrice === undefined && p.base_price) {
+    const base = parseFloat(p.base_price);
+    const discount = p.discount_percentage ? parseFloat(p.discount_percentage) : 0;
+    calculatedPrice = base - (base * (discount / 100));
+  }
 
-  const currentPrice = parseFloat(rawPrice) || 0;
+  const currentPrice = parseFloat(calculatedPrice) || 0;
   const originalPrice = parseFloat(rawOriginalPrice) || 0;
-  const stock = parseInt(rawStock, 10) || 0;
+  const stock = parseInt(p.stock ?? p.stock_quantity ?? 0, 10) || 0;
   
-  const categoryName = product.category_name || (typeof product.category === 'object' ? product.category?.name : null) || 'Uncategorized';
+  const categoryName = p.category_name || (typeof p.category === 'object' ? p.category?.name : null) || 'Uncategorized';
   
-  // 2. ACCURATE DISCOUNT MATH
   const hasDiscount = originalPrice > currentPrice && originalPrice > 0;
-  const discountPercentage = product.discount_percentage || (hasDiscount ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) : 0);
+  const discountPercentage = p.discount_percentage || (hasDiscount ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) : 0);
 
-  // 3. STOCK BAR PROGRESS
   const visualMaxStock = 50; 
   const stockBarWidth = Math.min(100, (stock / visualMaxStock) * 100);
 
   return (
     <motion.div 
-      // Only apply the bounce hover effect if NOT an admin
       whileHover={!isAdmin ? { y: -10 } : {}}
-      
-      // Only navigate if NOT an admin
       onClick={() => {
         if (!isAdmin) {
-          navigate(`/product/${product.id}`);
+          navigate(`/product/${p.id}`);
         }
       }}
-      
-      // Dynamically assign pointer and group classes
       className={`bg-white rounded-3xl p-6 border border-gray-100 relative transition-all h-full flex flex-col ${!isAdmin ? 'cursor-pointer group' : 'cursor-default'}`}
     >
-      {/* Dynamic Flash Deal Badge */}
       {hasDiscount && (
-        <div className="absolute top-4 left-4 z-10 bg-orange-200/50 backdrop-blur-md text-orange-700 px-3 py-1 rounded-full text-[10px] font-bold flex items-center shadow-sm">
+        <div className="absolute top-4 left-4 z-20 bg-orange-200/50 backdrop-blur-md text-orange-700 px-3 py-1 rounded-full text-[10px] font-bold flex items-center shadow-sm">
           <Tag size={12} className="mr-1"/> Flash Deal
         </div>
       )}
 
-      <div className="aspect-square rounded-2xl bg-gray-50 mb-6 overflow-hidden shrink-0">
+      {!isAdmin && (
+        <button 
+          onClick={(e) => {
+            e.stopPropagation(); 
+            
+            if (!isAuthenticated) {
+              toast.error("Sign in to add to wishlist");
+              return; 
+            }
+            
+            if (isInWishlist) {
+              const wishlistItem = wishlistItems.find(item => item.product?.id === p.id);
+              if (wishlistItem) {
+                  dispatch(removeFromWishlist(wishlistItem.id));
+              }
+            } else {
+              dispatch(addToWishlist(p.id));
+            }
+          }}
+          className={`absolute top-4 right-4 z-20 p-2.5 rounded-full backdrop-blur-md transition-all shadow-sm ${
+             isInWishlist 
+               ? 'bg-pink-50 text-pink-500' 
+               : 'bg-white/80 text-gray-400 hover:text-pink-500 hover:bg-white'
+          }`}
+        >
+          <Heart size={16} fill={isInWishlist ? "currentColor" : "none"} />
+        </button>
+      )}
+
+      <div className="aspect-square rounded-2xl bg-gray-50 mb-6 overflow-hidden shrink-0 relative z-10">
         <img 
-          src={product.image || "https://via.placeholder.com/400"} 
-          alt={product.name || "Product Image"} 
-          // Only zoom the image on hover if NOT an admin
+          src={p.image || "https://via.placeholder.com/400"} 
+          alt={p.name || "Product Image"} 
           className={`w-full h-full object-cover transition-transform duration-700 ${!isAdmin ? 'group-hover:scale-110' : ''}`}
         />
       </div>
 
       <div className="space-y-2 flex-1 flex flex-col">
-        {/* Dynamic Category */}
         <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest line-clamp-1">
           {categoryName}
         </p>
         
-        {/* Dynamic Name */}
         <h3 className="text-lg font-bold text-blue-900 line-clamp-2">
-          {product.name || "Product Name"}
+          {p.name || "Product Name"}
         </h3>
         
         <div className="flex items-center text-yellow-400 space-x-1">
@@ -76,7 +106,6 @@ const ProductCard = ({ product = {} }) => {
           <span className="text-gray-300 text-xs">(0)</span>
         </div>
         
-        {/* Dynamic Stock Indicator */}
         <div className="pt-2 mt-auto">
           <div className="flex justify-between text-[10px] font-bold mb-1">
             <p className={stock > 0 ? "text-green-600" : "text-red-500"}>
@@ -92,10 +121,8 @@ const ProductCard = ({ product = {} }) => {
           </div>
         </div>
 
-        {/* Dynamic Pricing with Inline Discount Percentage */}
         <div className="flex items-center justify-between pt-4">
           <div>
-            {/* Current Price & Percentage Badge side-by-side */}
             <div className="flex items-center gap-2">
               <p className="text-2xl font-black text-blue-950">${currentPrice.toFixed(2)}</p>
               {hasDiscount && (
@@ -105,7 +132,6 @@ const ProductCard = ({ product = {} }) => {
               )}
             </div>
             
-            {/* Original Strikethrough Price */}
             {hasDiscount ? (
               <p className="text-xs text-gray-400 line-through mt-0.5">${originalPrice.toFixed(2)}</p>
             ) : (
@@ -113,12 +139,11 @@ const ProductCard = ({ product = {} }) => {
             )}
           </div>
           
-          {/* Conditional Cart Button (Invisible for Admins) */}
           {!isAdmin && (
             <button 
               onClick={(e) => {
-                e.stopPropagation(); // Prevents the card click (navigation) from firing
-                // Cart addition logic will go here
+                e.stopPropagation(); 
+                dispatch(addToCart({ ...p, quantity: 1 }));
               }}
               className="bg-blue-900 text-white p-3 rounded-xl hover:bg-blue-600 transition-colors shrink-0 shadow-sm"
             >

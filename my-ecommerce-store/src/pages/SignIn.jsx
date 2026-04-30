@@ -4,7 +4,6 @@ import { Mail, Lock, LogIn, User } from 'lucide-react';
 import axios from 'axios';
 import { useDispatch } from 'react-redux';
 import { setCredentials } from '../features/auth/authSlice';
-import { syncCartWithBackend } from '../features/cart/CartSlice';
 import toast from 'react-hot-toast';
 
 const SignIn = () => {
@@ -21,9 +20,8 @@ const SignIn = () => {
         token: response.credential 
       });
       
-      // Dispatch the full response data, not just the tokens
       dispatch(setCredentials(res.data));
-      dispatch(syncCartWithBackend());
+      // Removed syncCartWithBackend() here to prevent overwriting the DB cart
       
       toast.success("Welcome to ShopWave!", { id: loadingToast });
       navigate('/');
@@ -36,7 +34,7 @@ const SignIn = () => {
     /* global google */
     if (window.google) {
       google.accounts.id.initialize({
-        client_id: "240859297300-959705dqg6crttenpk3kd7ffj1t7kbi8.apps.googleusercontent.com", // Get this from Cloud Console
+        client_id: "240859297300-959705dqg6crttenpk3kd7ffj1t7kbi8.apps.googleusercontent.com", 
         callback: handleGoogleResponse
       });
 
@@ -45,7 +43,7 @@ const SignIn = () => {
         { 
           theme: "outline", 
           size: "large", 
-          width: "280", // Reduced for better mobile fit
+          width: "280", 
           shape: "pill",
           text: "signin_with" 
         }
@@ -62,12 +60,12 @@ const SignIn = () => {
     try {
       const response = await axios.post('http://localhost:8000/api/token/', { username, password });
       if (response.data && response.data.access) {
-        // Pass the username to the payload so Redux can verify if it's the admin
         dispatch(setCredentials({ 
           ...response.data, 
           user: { username: username } 
         })); 
-        dispatch(syncCartWithBackend());
+        // Removed syncCartWithBackend() here as well
+        
         toast.success("Welcome back!", { id: loadingToast });
         navigate('/'); 
       }
@@ -87,7 +85,6 @@ const SignIn = () => {
         <h1 className="text-3xl font-black text-blue-950 mb-2">Sign In</h1>
         <p className="text-gray-400 font-bold text-sm mb-8 uppercase tracking-widest">Access your ShopWave Account</p>
         
-        {/* THE GOOGLE BUTTON TARGET */}
         <div id="googleBtn" className="flex justify-center mb-6"></div>
         
         <div className="flex items-center my-8">

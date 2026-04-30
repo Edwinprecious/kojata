@@ -1,25 +1,34 @@
-import React, { useState } from 'react';
-import { useSelector } from 'react-redux';
+import React, { useState, useEffect } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Check, ChevronRight, ArrowLeft, Video, 
-  CreditCard, Smartphone, Globe, ShieldCheck, Lock 
-} from 'lucide-react';
+import { Check, ChevronRight, Lock, Video, CreditCard, Smartphone, Globe, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import api from '../services/api';
+import { clearCart } from '../features/cart/CartSlice';
 
 const Checkout = () => {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const { items } = useSelector((state) => state.cart);
+  const { isAuthenticated } = useSelector((state) => state.auth);
   const [step, setStep] = useState(1);
   
   const [formData, setFormData] = useState({
     fullName: 'John Doe',
     phone: '+234 801 234 5678',
+    country: '',
+    state: '',
     city: 'Lagos',
     address: '',
     postalCode: '101110',
-    paymentMethod: 'credit_card' // Default
+    paymentMethod: 'card'
   });
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/');
+    }
+  }, [isAuthenticated, navigate]);
 
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const total = subtotal;
@@ -27,9 +36,27 @@ const Checkout = () => {
   const nextStep = () => setStep(s => s + 1);
   const prevStep = () => setStep(s => s - 1);
 
+  const handleInputChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handlePlaceOrder = async () => {
+    try {
+      const shippingAddress = `${formData.fullName}, ${formData.address}, ${formData.city}, ${formData.state}, ${formData.country}, ${formData.postalCode}. Phone: ${formData.phone}`;
+      await api.post('/checkout/', {
+        shipping_address: shippingAddress,
+        payment_method: formData.paymentMethod,
+        total_price: total
+      });
+      dispatch(clearCart());
+      navigate('/'); 
+    } catch (error) {}
+  };
+
+  if (!isAuthenticated) return null;
+
   return (
     <div className="min-h-screen bg-[#f8fafc] font-sans pb-20">
-      {/* 1. Refined Minimal Header */}
       <nav className="bg-white py-3 px-6 border-b border-gray-100 mb-6">
         <div className="max-w-5xl mx-auto flex justify-between items-center">
           <div onClick={() => navigate('/')} className="cursor-pointer flex items-center text-blue-900 font-black text-lg">
@@ -42,7 +69,6 @@ const Checkout = () => {
       </nav>
 
       <div className="max-w-5xl mx-auto px-4">
-        {/* 2. Compact Stepper */}
         <div className="flex items-center justify-center mb-8 max-w-xl mx-auto relative">
           {[1, 2, 3, 4].map((num) => (
             <React.Fragment key={num}>
@@ -65,44 +91,41 @@ const Checkout = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           
-          {/* LEFT: Stage Forms (7 Columns) */}
           <div className="lg:col-span-7">
             <AnimatePresence mode="wait">
-              {/* STAGE 1: ADDRESS */}
               {step === 1 && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
                   <h2 className="text-lg font-extrabold text-blue-950 mb-5">Shipping Address</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-bold">
                     <div className="space-y-1">
                       <label className="text-gray-400">Full Name</label>
-                      <input type="text" defaultValue={formData.fullName} className="w-full px-4 py-2.5 rounded-xl border border-gray-100 bg-gray-50/50 outline-none focus:border-blue-500" />
+                      <input type="text" name="fullName" value={formData.fullName} onChange={handleInputChange} className="w-full px-4 py-2.5 rounded-xl border border-gray-100 bg-gray-50/50 outline-none focus:border-blue-500" />
                     </div>
                     <div className="space-y-1">
                       <label className="text-gray-400">Phone Number</label>
-                      <input type="text" defaultValue={formData.phone} className="w-full px-4 py-2.5 rounded-xl border border-gray-100 bg-gray-50/50 outline-none focus:border-blue-500" />
+                      <input type="text" name="phone" value={formData.phone} onChange={handleInputChange} className="w-full px-4 py-2.5 rounded-xl border border-gray-100 bg-gray-50/50 outline-none focus:border-blue-500" />
                     </div>
                     <div className="space-y-1">
                       <label className="text-gray-400">Country</label>
-                      <select className="w-full px-4 py-2.5 rounded-xl border border-gray-100 bg-gray-50/50 text-gray-400"><option>Select country</option></select>
+                      <input type="text" name="country" value={formData.country} onChange={handleInputChange} placeholder="Country" className="w-full px-4 py-2.5 rounded-xl border border-gray-100 bg-gray-50/50 outline-none focus:border-blue-500" />
                     </div>
                     <div className="space-y-1">
                       <label className="text-gray-400">State/Province</label>
-                      <select className="w-full px-4 py-2.5 rounded-xl border border-gray-100 bg-gray-50/50 text-gray-400"><option>Select state</option></select>
+                      <input type="text" name="state" value={formData.state} onChange={handleInputChange} placeholder="State" className="w-full px-4 py-2.5 rounded-xl border border-gray-100 bg-gray-50/50 outline-none focus:border-blue-500" />
                     </div>
                     <div className="md:col-span-2 space-y-1">
                       <label className="text-gray-400">City</label>
-                      <input type="text" defaultValue={formData.city} className="w-full px-4 py-2.5 rounded-xl border border-gray-100 bg-gray-50/50 outline-none" />
+                      <input type="text" name="city" value={formData.city} onChange={handleInputChange} className="w-full px-4 py-2.5 rounded-xl border border-gray-100 bg-gray-50/50 outline-none" />
                     </div>
                     <div className="md:col-span-2 space-y-1">
                       <label className="text-gray-400">Street Address</label>
-                      <input type="text" placeholder="Start typing your street address..." className="w-full px-4 py-2.5 rounded-xl border border-gray-100 bg-gray-50/50 outline-none" />
+                      <input type="text" name="address" value={formData.address} onChange={handleInputChange} placeholder="Start typing your street address..." className="w-full px-4 py-2.5 rounded-xl border border-gray-100 bg-gray-50/50 outline-none" />
                     </div>
                   </div>
                   <button onClick={nextStep} className="m3-button-filled w-full mt-8 py-3.5 text-sm">Continue to Shipping <ChevronRight size={16} className="ml-1"/></button>
                 </motion.div>
               )}
 
-              {/* STAGE 2: SHIPPING */}
               {step === 2 && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
                   <h2 className="text-lg font-extrabold text-blue-950 mb-5">Shipping Method</h2>
@@ -120,7 +143,6 @@ const Checkout = () => {
                 </motion.div>
               )}
 
-              {/* STAGE 3: PAYMENT TEMPLATES */}
               {step === 3 && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
                   <h2 className="text-lg font-extrabold text-blue-950 mb-1">Choose Payment Method</h2>
@@ -149,7 +171,6 @@ const Checkout = () => {
                     ))}
                   </div>
 
-                  {/* Payment Disclaimer Template */}
                   <div className="bg-gray-50 border border-gray-100 p-3 rounded-xl mb-8 flex items-start">
                     <ShieldCheck size={14} className="text-blue-600 mr-2 mt-0.5" />
                     <p className="text-[9px] text-gray-500 leading-relaxed font-semibold">
@@ -164,7 +185,6 @@ const Checkout = () => {
                 </motion.div>
               )}
 
-              {/* STAGE 4: CONFIRM */}
               {step === 4 && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
                   <h2 className="text-lg font-extrabold text-blue-950 mb-6">Order Confirmation</h2>
@@ -180,7 +200,7 @@ const Checkout = () => {
                   </div>
                   <div className="flex gap-3 mt-10">
                     <button onClick={prevStep} className="flex-1 px-6 py-3 rounded-full border border-gray-100 text-xs font-bold text-gray-500">Back</button>
-                    <button className="m3-button-filled flex-[2] !bg-green-600 text-sm shadow-lg shadow-green-100">
+                    <button onClick={handlePlaceOrder} className="m3-button-filled flex-[2] !bg-green-600 text-sm shadow-lg shadow-green-100">
                        <Check size={16} className="mr-1"/> Place Order — ${total.toFixed(2)}
                     </button>
                   </div>
@@ -189,7 +209,6 @@ const Checkout = () => {
             </AnimatePresence>
           </div>
 
-          {/* RIGHT: Refined White/Blue Summary (5 Columns) */}
           <div className="lg:col-span-5 sticky top-6">
             <div className="bg-white border border-blue-100 rounded-3xl p-6 shadow-sm">
               <h3 className="text-sm font-black text-blue-950 uppercase tracking-widest mb-6 border-b border-blue-50 pb-3">Order Summary</h3>

@@ -6,9 +6,10 @@ import toast from 'react-hot-toast';
 import { 
   Heart, Truck, ArrowLeft, 
   Plus, Minus, Star, Share2, MessageSquare, CheckCircle, X,
-  PackageX, Tag // Added Tag icon
+  PackageX, Tag 
 } from 'lucide-react';
 import { addToCart } from '../features/cart/CartSlice';
+import { addToWishlist, removeFromWishlist } from '../features/wishlist/wishlistSlice'; 
 import api from '../services/api';
 
 const ProductDetail = () => {
@@ -17,21 +18,19 @@ const ProductDetail = () => {
   const dispatch = useDispatch();
   
   const { token, isAuthenticated, isAdmin } = useSelector((state) => state.auth);
+  const wishlistItems = useSelector((state) => state.wishlist.items); 
   
-  // Data States
   const [product, setProduct] = useState(null);
   const [categoryName, setCategoryName] = useState('');
   const [reviews, setReviews] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Interaction States
   const [quantity, setQuantity] = useState(1);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [userRating, setUserRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [reviewComment, setReviewComment] = useState('');
 
-  // Fetch product data and reviews from Django
   useEffect(() => {
     const fetchProductDetails = async () => {
       setIsLoading(true);
@@ -53,7 +52,7 @@ const ProductDetail = () => {
         setReviews(Array.isArray(reviewRes.data) ? reviewRes.data : reviewRes.data.results || []);
 
       } catch (error) {
-        console.error("Error fetching product:", error);
+        console.error(error);
         toast.error("Could not load product details.");
       } finally {
         setIsLoading(false);
@@ -75,7 +74,6 @@ const ProductDetail = () => {
     e.preventDefault();
     if (!isAuthenticated) {
       toast.error("You must be signed in to leave a review.");
-      navigate('/signin');
       return;
     }
     if (userRating === 0) {
@@ -100,7 +98,9 @@ const ProductDetail = () => {
       toast.success("Review published successfully!", { id: reviewToast });
 
     } catch (error) {
-      toast.error("Failed to submit review.", { id: reviewToast });
+      // Parse the backend error message directly
+      const errorMessage = error.response?.data?.error || error.response?.data?.non_field_errors?.[0] || "Failed to submit review.";
+      toast.error(errorMessage, { id: reviewToast });
     }
   };
 
@@ -121,21 +121,38 @@ const ProductDetail = () => {
         </div>
         <h2 className="text-2xl font-extrabold text-blue-950 mb-2">Product Not Found</h2>
         <p className="text-gray-400 font-bold mb-6">This item may have been removed or doesn't exist.</p>
-        <button onClick={() => navigate('/category/all')} className="m3-button-filled">Return to Shop</button>
+        <button onClick={() => navigate('/category/all')} className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors">Return to Shop</button>
       </div>
     );
   }
 
-  // --- DISCOUNT PARSING LOGIC ---
-  const rawPrice = product.price ?? 0;
-  const rawOriginalPrice = product.original_price ?? product.originalPrice ?? 0;
+  const rawOriginalPrice = product.original_price ?? product.originalPrice ?? product.base_price ?? 0;
+  
+  let calculatedPrice = product.price;
+  if (calculatedPrice === undefined && product.base_price) {
+    const base = parseFloat(product.base_price);
+    const discount = product.discount_percentage ? parseFloat(product.discount_percentage) : 0;
+    calculatedPrice = base - (base * (discount / 100));
+  }
 
-  const currentPrice = parseFloat(rawPrice) || 0;
+  const currentPrice = parseFloat(calculatedPrice) || 0;
   const originalPrice = parseFloat(rawOriginalPrice) || 0;
   
   const hasDiscount = originalPrice > currentPrice && originalPrice > 0;
   const discountPercentage = product.discount_percentage || (hasDiscount ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) : 0);
 
+  const isInWishlist = wishlistItems.some(item => item.product?.id === product.id);
+
+  // --- Review Calculation Stats ---
+  const totalReviews = reviews.length;
+  const dynamicAvgRating = totalReviews > 0 
+    ? (reviews.reduce((acc, curr) => acc + curr.rating, 0) / totalReviews).toFixed(1) 
+    : "0.0";
+
+  const starCounts = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+  reviews.forEach(r => {
+    if (starCounts[r.rating] !== undefined) starCounts[r.rating]++;
+  });
 
   return (
     <div className="max-w-7xl mx-auto px-6 pt-10 pb-20 font-sans">
@@ -148,7 +165,6 @@ const ProductDetail = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="rounded-[40px] overflow-hidden aspect-square bg-gray-50 border border-gray-100 shadow-sm relative group">
-          {/* Flash Deal Badge */}
           {hasDiscount && (
             <div className="absolute top-6 left-6 z-10 bg-orange-200/80 backdrop-blur-md text-orange-800 px-4 py-1.5 rounded-full text-xs font-bold flex items-center shadow-sm">
               <Tag size={16} className="mr-1.5"/> Flash Deal
@@ -189,9 +205,9 @@ const ProductDetail = () => {
             
             <div className="flex items-center text-yellow-400">
               {[...Array(5)].map((_, i) => (
-                <Star key={i} size={18} fill={i < Math.floor(product.rating || 0) ? "currentColor" : "none"} className="mr-1" />
+                <Star key={i} size={18} fill={i < Math.floor(dynamicAvgRating) ? "currentColor" : "none"} className="mr-1" />
               ))}
-              <span className="text-xs font-bold text-gray-400 ml-2 uppercase tracking-tighter">{reviews.length} reviews</span>
+              <span className="text-xs font-bold text-gray-400 ml-2 uppercase tracking-tighter">{totalReviews} reviews</span>
             </div>
           </div>
 
@@ -202,17 +218,39 @@ const ProductDetail = () => {
             <span>{product.stock > 0 ? `${product.stock} items in stock. Ready to ship.` : "Currently Out of Stock"}</span>
           </div>
 
-          {/* HIDDEN FOR ADMINS */}
           {!isAdmin && (
             <div className="space-y-6">
               <div className="flex items-center gap-4">
                 <div className="flex items-center border border-gray-100 rounded-full p-1.5 bg-gray-50/50">
                   <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="p-3 hover:bg-white rounded-full transition-all active:scale-90"><Minus size={18} /></button>
                   <span className="px-8 font-black text-xl text-blue-950">{quantity}</span>
-                  {/* CAPPED AT STOCK LIMIT */}
                   <button onClick={() => setQuantity(q => Math.min(product.stock, q + 1))} className="p-3 hover:bg-white rounded-full transition-all active:scale-90"><Plus size={18} /></button>
                 </div>
-                <button className="p-5 rounded-full border border-gray-100 hover:text-pink-500 transition-all text-gray-400 bg-white shadow-sm hover:shadow-md"><Heart size={24} /></button>
+                
+                <button 
+                  onClick={() => {
+                     if (!isAuthenticated) {
+                       toast.error("Sign in to add to wishlist");
+                       return; 
+                     }
+                     
+                     if (isInWishlist) {
+                       const wishlistItem = wishlistItems.find(item => item.product?.id === product.id);
+                       if (wishlistItem) {
+                           dispatch(removeFromWishlist(wishlistItem.id));
+                       }
+                     } else {
+                       dispatch(addToWishlist(product.id));
+                     }
+                  }}
+                  className={`p-5 rounded-full border transition-all shadow-sm hover:shadow-md ${
+                    isInWishlist 
+                      ? 'bg-pink-50 border-pink-200 text-pink-500 hover:text-pink-600' 
+                      : 'border-gray-100 text-gray-400 bg-white hover:text-pink-500'
+                  }`}
+                >
+                  <Heart size={24} fill={isInWishlist ? "currentColor" : "none"} />
+                </button>
               </div>
               
               <button 
@@ -229,28 +267,44 @@ const ProductDetail = () => {
 
       <section className="mt-32 pt-24 border-t border-gray-100">
         <div className="flex flex-col lg:flex-row gap-16">
+          
+          {/* Dynamic Review Breakdown Panel */}
           <div className="lg:w-1/3 space-y-8">
             <div>
               <h2 className="text-3xl font-extrabold text-blue-950 mb-2">Customer Feedback</h2>
               <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Verified Social Proof</p>
             </div>
 
-            <div className="m3-card !bg-blue-50/50 border border-blue-100 p-8 text-center rounded-[2rem]">
-              <p className="text-7xl font-black text-blue-600 mb-2">{product.rating || "0.0"}</p>
+            <div className="border border-blue-100 bg-blue-50/50 p-8 text-center rounded-[2rem]">
+              <p className="text-7xl font-black text-blue-600 mb-2">{dynamicAvgRating}</p>
               <div className="flex justify-center text-yellow-400 mb-4">
-                {[...Array(5)].map((_, i) => <Star key={i} size={20} fill={i < Math.floor(product.rating || 0) ? "currentColor" : "none"} />)}
+                {[...Array(5)].map((_, i) => <Star key={i} size={20} fill={i < Math.floor(dynamicAvgRating) ? "currentColor" : "none"} />)}
               </div>
-              <p className="text-sm font-bold text-blue-900">Based on {reviews.length} Verified Purchases</p>
+              <p className="text-sm font-bold text-blue-900 mb-6">Based on {totalReviews} Verified Purchases</p>
+              
+              <div className="space-y-3">
+                {[5, 4, 3, 2, 1].map(star => {
+                  const count = starCounts[star];
+                  const percentage = totalReviews > 0 ? (count / totalReviews) * 100 : 0;
+                  return (
+                    <div key={star} className="flex items-center text-[11px] font-bold text-blue-900 uppercase tracking-widest">
+                      <span className="w-16 text-left">{star} Stars</span>
+                      <div className="flex-1 h-2 bg-white rounded-full overflow-hidden border border-blue-100 mx-2">
+                        <div className="h-full bg-yellow-400 rounded-full transition-all duration-1000" style={{ width: `${percentage}%` }}></div>
+                      </div>
+                      <span className="w-10 text-right">{Math.round(percentage)}%</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* HIDDEN FOR ADMINS */}
             {!isAdmin && (
               <div className="pt-4">
                 <button 
                   onClick={() => {
                     if(!isAuthenticated) {
                        toast.error("Please sign in to rate products.");
-                       navigate('/signin');
                     } else {
                        setIsReviewModalOpen(true);
                     }

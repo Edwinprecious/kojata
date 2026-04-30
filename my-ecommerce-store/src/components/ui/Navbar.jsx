@@ -1,4 +1,3 @@
-// src/components/ui/Navbar.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -17,6 +16,8 @@ const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false); 
   const [isCategoryOpen, setIsCategoryOpen] = useState(false); 
+  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+  const [isMobileProfileOpen, setIsMobileProfileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
   const dropdownRef = useRef(null);
@@ -30,6 +31,7 @@ const Navbar = () => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsCategoryOpen(false);
+        setIsProfileDropdownOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -39,7 +41,12 @@ const Navbar = () => {
   const handleLogout = () => {
     dispatch(logout()); 
     toast.success("Signed out successfully");
-    navigate('/signin');
+    
+    // A 0ms timeout acts as a "next tick" delay
+    setTimeout(() => {
+      navigate('/');
+    }, 0);
+    
     closeMenu();
   };
 
@@ -65,13 +72,14 @@ const Navbar = () => {
     setIsMenuOpen(false);
     setIsDropdownOpen(false);
     setIsCategoryOpen(false);
+    setIsProfileDropdownOpen(false);
+    setIsMobileProfileOpen(false);
   };
 
   return (
     <nav className="fixed top-0 w-full z-[100] bg-white h-20 px-4 md:px-6 font-sans border-b border-gray-100">
       <div className="max-w-7xl mx-auto h-full flex items-center justify-between gap-4">
         
-        {/* Left: Hamburger Menu & Logo */}
         <div className="flex items-center gap-2 md:gap-4">
           <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="lg:hidden p-2 -ml-2 text-blue-900">
             {isMenuOpen ? <X size={28} /> : <Menu size={28} />}
@@ -85,7 +93,6 @@ const Navbar = () => {
           </Link>
         </div>
 
-        {/* Middle: Functional Search Bar */}
         <form onSubmit={handleSearch} className="hidden md:flex flex-1 max-w-md relative group">
           <input 
             type="text"
@@ -97,11 +104,9 @@ const Navbar = () => {
           <Search className="absolute left-4 top-3 text-gray-400 group-focus-within:text-blue-600 transition-colors" size={18} />
         </form>
 
-        {/* Desktop Links & Auth */}
         <div className="flex items-center space-x-3">
           <div className="hidden lg:flex items-center space-x-6 text-sm font-bold text-gray-600 mr-4">
             
-            {/* ADDED HOME LINK HERE */}
             <Link to="/" className="hover:text-blue-600 transition-colors flex items-center gap-1.5">
               <HomeIcon size={16} /> Home
             </Link>
@@ -173,12 +178,47 @@ const Navbar = () => {
                     <Shield size={20} />
                   </Link>
                 )}
-                <Link to="/profile" title="Profile" className="p-2 bg-gray-50 text-blue-900 rounded-xl hover:bg-blue-100 transition-all">
-                  <User size={20} />
-                </Link>
-                <button onClick={handleLogout} title="Sign Out" className="p-2 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-all">
-                  <LogOut size={20} />
-                </button>
+                
+                {/* Desktop Profile Dropdown */}
+                <div 
+                  className="relative py-2" 
+                  onMouseEnter={() => setIsProfileDropdownOpen(true)}
+                  onMouseLeave={() => setIsProfileDropdownOpen(false)}
+                >
+                  <button className="p-2 bg-gray-50 text-blue-900 rounded-xl hover:bg-blue-100 transition-all flex items-center gap-1.5">
+                    <User size={20} />
+                    <ChevronDown size={14} className={`transition-transform duration-200 ${isProfileDropdownOpen ? 'rotate-180 text-blue-600' : ''}`} />
+                  </button>
+
+                  <AnimatePresence>
+                    {isProfileDropdownOpen && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute top-full right-0 mt-0 w-48 bg-white border border-gray-100 rounded-2xl shadow-xl shadow-blue-900/5 py-2 overflow-hidden z-50"
+                      >
+                        <Link
+                          to="/profile"
+                          onClick={() => setIsProfileDropdownOpen(false)}
+                          className="px-5 py-3 text-sm font-semibold text-gray-600 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center gap-3 w-full"
+                        >
+                          <User size={16} /> My Profile
+                        </Link>
+                        <button
+                          onClick={() => {
+                            setIsProfileDropdownOpen(false);
+                            handleLogout();
+                          }}
+                          className="px-5 py-3 text-sm font-semibold text-red-500 hover:bg-red-50 transition-colors flex items-center gap-3 w-full text-left"
+                        >
+                          <LogOut size={16} /> Sign Out
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </>
             ) : (
               <>
@@ -190,7 +230,6 @@ const Navbar = () => {
         </div>
       </div>
 
-      {/* MOBILE MENU */}
       <AnimatePresence>
         {isMenuOpen && (
           <motion.div 
@@ -199,7 +238,6 @@ const Navbar = () => {
             exit={{ opacity: 0, y: -10 }}
             className="absolute top-20 left-0 w-full bg-white shadow-2xl border-t border-gray-100 p-4 lg:hidden flex flex-col gap-4 max-h-[calc(100dvh-80px)] overflow-y-auto z-50 overscroll-contain"
           >
-            {/* Mobile Search */}
             <form onSubmit={handleSearch} className="relative w-full mb-2 shrink-0">
               <input 
                 type="text"
@@ -211,9 +249,7 @@ const Navbar = () => {
               <Search className="absolute left-4 top-3.5 text-gray-400" size={18} />
             </form>
 
-            {/* Quick Links */}
             <div className="grid grid-cols-2 gap-3 shrink-0">
-              {/* ADDED HOME LINK TO MOBILE MENU */}
               <Link to="/" onClick={closeMenu} className="p-3 text-blue-900 font-bold bg-blue-50 rounded-xl flex items-center justify-center col-span-2">
                 <HomeIcon size={18} className="mr-2" /> Home
               </Link>
@@ -225,7 +261,6 @@ const Navbar = () => {
               </Link>
             </div>
 
-            {/* Mobile Categories Accordion */}
             <div className="border border-gray-100 rounded-2xl overflow-hidden mt-2 bg-gray-50 flex flex-col shrink-0">
               <div className="flex items-center justify-between font-bold text-blue-900">
                 <Link 
@@ -269,7 +304,6 @@ const Navbar = () => {
               </AnimatePresence>
             </div>
 
-            {/* Mobile Auth */}
             <div className="mt-4 pt-4 border-t border-gray-100 flex flex-col gap-3 pb-6 shrink-0">
               {isAuthenticated ? (
                 <>
@@ -278,12 +312,37 @@ const Navbar = () => {
                       <Shield size={18} /> Admin Dashboard
                     </Link>
                   )}
-                  <Link to="/profile" onClick={closeMenu} className="p-4 bg-gray-50 rounded-2xl font-bold flex justify-center items-center gap-2 text-blue-900">
-                    <User size={18} /> My Profile
-                  </Link>
-                  <button onClick={handleLogout} className="p-4 bg-red-50 text-red-600 rounded-2xl font-bold flex justify-center items-center gap-2">
-                    <LogOut size={18} /> Sign Out
-                  </button>
+                  
+                  {/* Mobile Profile Accordion */}
+                  <div className="border border-gray-100 rounded-2xl overflow-hidden bg-white flex flex-col shrink-0">
+                    <button 
+                      onClick={() => setIsMobileProfileOpen(!isMobileProfileOpen)} 
+                      className="p-4 flex items-center justify-between font-bold text-blue-900 bg-gray-50 hover:bg-gray-100 transition-colors"
+                    >
+                      <span className="flex items-center gap-2"><User size={18} /> My Account</span>
+                      <ChevronDown size={18} className={`transition-transform duration-300 ${isMobileProfileOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    
+                    <AnimatePresence>
+                      {isMobileProfileOpen && (
+                        <motion.div 
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          className="bg-white"
+                        >
+                          <div className="flex flex-col">
+                            <Link to="/profile" onClick={closeMenu} className="p-4 border-t border-gray-50 flex items-center gap-3 text-sm font-semibold text-gray-600 hover:bg-blue-50 transition-colors">
+                              <User size={16} /> My Profile
+                            </Link>
+                            <button onClick={handleLogout} className="p-4 border-t border-gray-50 flex items-center gap-3 text-sm font-semibold text-red-500 hover:bg-red-50 transition-colors text-left w-full">
+                              <LogOut size={16} /> Sign Out
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </>
               ) : (
                 <>

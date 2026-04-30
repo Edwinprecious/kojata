@@ -1,9 +1,7 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
-// Only importing the "Safe" icons that haven't caused errors
+import { Link, useLocation } from 'react-router-dom';
 import { Video, ArrowUp, Mail, MapPin } from 'lucide-react';
 
-// 1. MANUAL SVG COMPONENTS (Prevents the "export not found" crashes)
 const Instagram = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
 );
@@ -22,44 +20,47 @@ const ShieldCheck = () => (
 
 const Footer = () => {
   const currentYear = new Date().getFullYear();
+  const location = useLocation();
 
   return (
     <footer className="w-full font-sans">
       
-      {/* 1. Newsletter / Promo Section - Light Blue Style */}
-      <section className="bg-[#f0f7ff] py-20 px-6 text-center border-t border-blue-50">
-        <div className="max-w-4xl mx-auto space-y-6">
-          <h2 className="text-4xl md:text-5xl font-black text-blue-950 tracking-tighter">
-            Get <span className="text-blue-600">15% off</span> your first order
-          </h2>
-          <p className="text-gray-500 text-lg max-w-2xl mx-auto font-bold leading-relaxed">
-            Join 340,000+ subscribers and get early access to flash deals, 
-            exclusive discounts, and new arrivals.
-          </p>
-          
-          <form className="flex flex-col md:flex-row items-center justify-center gap-4 mt-8">
-            <input 
-              type="email" 
-              placeholder="Enter your email address"
-              className="w-full md:w-[400px] px-6 py-4 rounded-full border border-blue-200 outline-none focus:border-blue-500 bg-white transition-all shadow-sm font-semibold"
-            />
-            <button className="w-full md:w-auto bg-blue-600 text-white px-10 py-4 rounded-full font-black hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20 uppercase text-xs tracking-widest">
-              Get My 15% Off
-            </button>
-          </form>
-          
-          <p className="text-[10px] text-gray-400 mt-6 font-bold uppercase tracking-widest">
-            No spam, ever. Unsubscribe anytime. 🔒 Secure & Private.
-          </p>
-        </div>
-      </section>
+      {/* Conditionally render this section ONLY on the profile page */}
+      {location.pathname === '/profile' && (
+        <section className="bg-[#f0f7ff] py-10 px-6 text-center border-t border-blue-50">
+          <div className="max-w-4xl mx-auto space-y-4">
+            <h2 className="text-3xl md:text-4xl font-black text-blue-950 tracking-tighter">
+              Get <span className="text-blue-600">15% off</span> your first order
+            </h2>
+            <p className="text-gray-500 text-base max-w-2xl mx-auto font-bold leading-relaxed">
+              Join 340,000+ subscribers and get early access to flash deals, 
+              exclusive discounts, and new arrivals.
+            </p>
+            
+            <form className="flex flex-col md:flex-row items-center justify-center gap-4 mt-6">
+              <input 
+                type="email" 
+                placeholder="Enter your email address"
+                className="w-full md:w-[400px] px-6 py-3 rounded-full border border-blue-200 outline-none focus:border-blue-500 bg-white transition-all shadow-sm font-semibold"
+              />
+              <button className="w-full md:w-auto bg-blue-600 text-white px-8 py-3 rounded-full font-black hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20 uppercase text-xs tracking-widest">
+                Get My 15% Off
+              </button>
+            </form>
+            
+            <p className="text-[10px] text-gray-400 mt-4 font-bold uppercase tracking-widest">
+              No spam, ever. Unsubscribe anytime. 🔒 Secure & Private.
+            </p>
+          </div>
+        </section>
+      )}
 
-      {/* 2. Main Dark Footer Section */}
-      <section className="bg-[#0a111f] text-gray-400 pt-20 pb-10 px-6">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-12">
+      <section className="bg-[#0a111f] text-gray-400 pt-12 pb-8 px-6">
+        {/* Adjusted grid: 2 columns on mobile, 4 on desktop */}
+        <div className="max-w-7xl mx-auto grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-10">
           
-          {/* Logo and Tagline */}
-          <div className="lg:col-span-2 space-y-6">
+          {/* Brand info spans full width (2 columns) on mobile, 2 cols on desktop */}
+          <div className="col-span-2 space-y-4">
             <Link to="/" className="text-2xl font-black text-white flex items-center">
               <span className="bg-blue-600 text-white p-1 rounded-md mr-2">
                 <Video size={20}/>
@@ -70,8 +71,7 @@ const Footer = () => {
               Your destination for premium products at unbeatable prices. 
               Live deals, real savings. Redefining the wave of commerce.
             </p>
-            {/* Manual Social Icons (Safe from Import Errors) */}
-            <div className="flex gap-5 pt-4">
+            <div className="flex gap-4 pt-2">
                <span className="hover:text-blue-500 transition-colors cursor-pointer"><Instagram /></span>
                <span className="hover:text-blue-500 transition-colors cursor-pointer"><Twitter /></span>
                <span className="hover:text-blue-500 transition-colors cursor-pointer"><Facebook /></span>
@@ -79,22 +79,10 @@ const Footer = () => {
             </div>
           </div>
 
-          {/* Links: Shop */}
-          <div>
-            <h3 className="text-white font-black text-xs uppercase tracking-[0.2em] mb-8">Shop</h3>
-            <ul className="space-y-4 text-sm font-bold">
-              <li><Link to="/category/all" className="hover:text-white transition-colors">New Arrivals</Link></li>
-              <li><Link to="/deals" className="hover:text-white transition-colors">Flash Deals</Link></li>
-              <li><Link to="/category/electronics" className="hover:text-white transition-colors">Electronics</Link></li>
-              <li><Link to="/category/fashion" className="hover:text-white transition-colors">Fashion</Link></li>
-              <li><Link to="/category/home" className="hover:text-white transition-colors">Home & Decor</Link></li>
-            </ul>
-          </div>
-
-          {/* Links: Support */}
-          <div>
-            <h3 className="text-white font-black text-xs uppercase tracking-[0.2em] mb-8">Support</h3>
-            <ul className="space-y-4 text-sm font-bold">
+          {/* Support takes 1 column on mobile (side-by-side) */}
+          <div className="col-span-1">
+            <h3 className="text-white font-black text-[10px] sm:text-xs uppercase tracking-[0.2em] mb-4 sm:mb-5">Support</h3>
+            <ul className="space-y-2 text-xs sm:text-sm font-bold">
               <li><Link to="/help" className="hover:text-white transition-colors">Help Center</Link></li>
               <li><Link to="/shipping-info" className="hover:text-white transition-colors">Shipping Info</Link></li>
               <li><Link to="/returns" className="hover:text-white transition-colors">Returns</Link></li>
@@ -103,10 +91,10 @@ const Footer = () => {
             </ul>
           </div>
 
-          {/* Links: Company */}
-          <div>
-            <h3 className="text-white font-black text-xs uppercase tracking-[0.2em] mb-8">Company</h3>
-            <ul className="space-y-4 text-sm font-bold">
+          {/* Company takes 1 column on mobile (side-by-side) */}
+          <div className="col-span-1">
+            <h3 className="text-white font-black text-[10px] sm:text-xs uppercase tracking-[0.2em] mb-4 sm:mb-5">Company</h3>
+            <ul className="space-y-2 text-xs sm:text-sm font-bold">
               <li><Link to="/about" className="hover:text-white transition-colors">About Us</Link></li>
               <li><Link to="/careers" className="hover:text-white transition-colors">Careers</Link></li>
               <li><Link to="/press" className="hover:text-white transition-colors">Press</Link></li>
@@ -116,14 +104,12 @@ const Footer = () => {
           </div>
         </div>
 
-        {/* 3. Bottom Bar */}
-        <div className="max-w-7xl mx-auto mt-20 pt-8 border-t border-gray-800 flex flex-col md:flex-row items-center justify-between gap-6">
+        <div className="max-w-7xl mx-auto mt-10 pt-6 border-t border-gray-800 flex flex-col md:flex-row items-center justify-between gap-6">
           <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">
             © {currentYear} ShopWave. All rights reserved.
           </p>
 
-          {/* Payment Badges */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-center">
             {['Visa', 'Mastercard', 'PayPal', 'Apple Pay'].map((p) => (
               <span key={p} className="bg-gray-800 text-[8px] text-gray-300 px-3 py-1.5 rounded-md uppercase tracking-widest font-black border border-gray-700">
                 {p}
@@ -131,16 +117,15 @@ const Footer = () => {
             ))}
           </div>
 
-          {/* Back to Top */}
           <div className="flex items-center gap-6">
             <div className="flex items-center text-[10px] font-black text-gray-500 uppercase tracking-widest">
               <ShieldCheck /> AES-256 SECURED
             </div>
             <button 
               onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-              className="bg-blue-600 text-white p-3 rounded-full hover:bg-blue-500 transition-all shadow-xl shadow-blue-600/20 group"
+              className="bg-blue-600 text-white p-2.5 rounded-full hover:bg-blue-500 transition-all shadow-xl shadow-blue-600/20 group"
             >
-              <ArrowUp size={20} className="group-hover:-translate-y-1 transition-transform" />
+              <ArrowUp size={18} className="group-hover:-translate-y-1 transition-transform" />
             </button>
           </div>
         </div>

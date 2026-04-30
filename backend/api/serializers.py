@@ -1,43 +1,41 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Category, Product, Order, OrderItem, Review
-from rest_framework.validators import UniqueValidator
+from django.db.models import Avg
+from .models import Product, Category, Review, Order, OrderItem, UserProfile, WishlistItem
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
         fields = '__all__'
 
-class UserSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = ['id', 'username', 'email']
-
 class ProductSerializer(serializers.ModelSerializer):
-    category_name = serializers.ReadOnlyField(source='category.name')
+    category_name = serializers.CharField(source='category.name', read_only=True)
     price = serializers.SerializerMethodField()
-    original_price = serializers.SerializerMethodField()
+    original_price = serializers.DecimalField(source='base_price', max_digits=10, decimal_places=2, read_only=True)
     
+    # Add a dynamic method field to always calculate the true rating
+    rating = serializers.SerializerMethodField()
+
     class Meta:
         model = Product
         fields = '__all__'
-        
+
     def get_price(self, obj):
-        # Failsafe: Default to 0 if the database returns None
-        base = obj.base_price or 0
-        discount = obj.discount_percentage or 0
-        
-        if discount > 0:
-            discount_amount = (base * discount) / 100
-            return round(base - discount_amount, 2)
+        base = float(obj.base_price)
+        discount = obj.discount_percentage
+        if discount and discount > 0:
+            return round(base - (base * (discount / 100.0)), 2)
         return base
 
-    def get_original_price(self, obj):
-        # Failsafe: Default to 0 if the database returns None
-        discount = obj.discount_percentage or 0
-        if discount > 0:
-            return obj.base_price or 0
-        return None
+    # Dynamically compute the average rating from actual reviews
+    def get_rating(self, obj):
+        avg = obj.reviews.aggregate(Avg('rating'))['rating__avg']
+        return round(avg, 1) if avg else 0.0
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'first_name', 'last_name']
 
 class ReviewSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
@@ -45,24 +43,28 @@ class ReviewSerializer(serializers.ModelSerializer):
     class Meta:
         model = Review
         fields = '__all__'
-
+        read_only_fields = ['user', 'verified']
 
 class RegisterSerializer(serializers.ModelSerializer):
-    email = serializers.EmailField(
-        required=True,
-        validators=[UniqueValidator(queryset=User.objects.all(), message="A user with this email already exists.")]
-    )
     password = serializers.CharField(write_only=True)
 
     class Meta:
         model = User
-        fields = ('username', 'password', 'email')
+        fields = ('username', 'email', 'password')
 
     def create(self, validated_data):
         user = User.objects.create_user(
             username=validated_data['username'],
             email=validated_data['email'],
             password=validated_data['password'],
-            is_active=False  # User is inactive until email is confirmed
+            is_active=False
         )
         return user
+
+class WishlistItemSerializer(serializers.ModelSerializer):
+    product = ProductSerializer(read_only=True)
+
+    class Meta:
+        model = WishlistItem
+        fields = ['id', 'user', 'product', 'added_at']
+        read_only_fields = ['user']

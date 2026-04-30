@@ -10,27 +10,10 @@ class Category(models.Model):
 class Product(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField()
-
-    # --- NEW STRAIGHTFORWARD PRICING ---
-    base_price = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
-        default=0.00,
-        help_text="The regular, everyday price."
-    )
-    discount_percentage = models.PositiveIntegerField(
-        default=0, 
-        help_text="Enter a number from 0 to 100."
-    )
-
+    base_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    discount_percentage = models.PositiveIntegerField(default=0)
     stock = models.IntegerField(default=0)
-
-    category = models.ForeignKey(
-        Category,
-        on_delete=models.CASCADE,
-        related_name="products"
-    )
-
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="products")
     image = models.ImageField(upload_to='products/', blank=True, null=True)
     rating = models.FloatField(default=0)
 
@@ -42,23 +25,9 @@ class Order(models.Model):
         ('processing', 'Processing'),
         ('delivered', 'Delivered'),
     ]
-
-    user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE
-    )
-
-    total_price = models.DecimalField(
-        max_digits=10,
-        decimal_places=2
-    )
-
-    status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default='processing'
-    )
-
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    total_price = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='processing')
     shipping_address = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -66,17 +35,8 @@ class Order(models.Model):
         return f"Order {self.id}"
 
 class Review(models.Model):
-    product = models.ForeignKey(
-        Product,
-        on_delete=models.CASCADE,
-        related_name="reviews"
-    )
-
-    user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE
-    )
-
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="reviews")
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
     rating = models.IntegerField()
     comment = models.TextField()
     verified = models.BooleanField(default=False)
@@ -93,8 +53,6 @@ class OrderItem(models.Model):
 
     def __str__(self):
         return f"{self.quantity} x {self.product.name}"
-
-# --- ADMIN TRACKING MODELS ---
 
 class Event(models.Model):
     name = models.CharField(max_length=255)
@@ -115,10 +73,33 @@ class WebsiteVisit(models.Model):
     def __str__(self):
         return f"Visit to {self.page_url} at {self.visited_at}"
 
-# --- USER PROFILE MODEL ---
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     profile_image = models.ImageField(upload_to='profiles/', blank=True, null=True)
+    phone = models.CharField(max_length=20, blank=True, null=True)
 
     def __str__(self):
         return f"{self.user.username}'s Profile"
+
+class UserAddress(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='addresses')
+    street = models.TextField()
+    city = models.CharField(max_length=100)
+    state = models.CharField(max_length=100)
+    country = models.CharField(max_length=100, blank=True, null=True)
+    postal_code = models.CharField(max_length=20, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.street}"
+
+class WishlistItem(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='wishlist')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'product')
+
+    def __str__(self):
+        return f"{self.user.username} - {self.product.name}"
