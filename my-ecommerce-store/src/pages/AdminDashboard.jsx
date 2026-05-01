@@ -5,10 +5,11 @@ import { useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, PackageSearch, ShoppingCart, 
   Activity, Plus, Trash2, Edit, ChevronRight, 
-  TrendingUp, Users, X, Filter, UploadCloud, 
-  ChevronDown, Grid, Laptop, ShoppingBag, Watch, 
+  TrendingUp, Users, X, Filter, UploadCloud,
+  ChevronDown, Grid, Laptop, ShoppingBag, Watch,
   Home as HomeIcon, Sparkles, ArrowLeft,
-  Footprints, Check
+  Footprints, Check, Zap, Calendar, Package,
+  CheckCircle, DollarSign
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../services/api';
@@ -18,19 +19,34 @@ const AdminDashboard = () => {
   const { token } = useSelector((state) => state.auth);
   const navigate = useNavigate();
 
-  // --- Product & Category State ---
+  // --- State ---
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [events, setEvents] = useState([]);
+  const [adminOrders, setAdminOrders] = useState([]);
   
-  // --- Modal & Form State ---
+  // Updated Traffic Stats Default
+  const [trafficStats, setTrafficStats] = useState({ 
+    unique_ips: 0, top_page: 'No data', pending_orders: 0, 
+    completed_orders: 0, revenue: 0, revenue_weekly: 0, revenue_monthly: 0 
+  });
+  
+  const [selectedCategory, setSelectedCategory] = useState('all');
+
+  // --- Modal & Form State (Products) ---
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [imageFile, setImageFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
-  
   const [formData, setFormData] = useState({
     name: '', base_price: '', discount_percentage: '', stock: '', category: '', description: ''
+  });
+
+  // --- Modal & Form State (Events) ---
+  const [isEventModalOpen, setIsEventModalOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState(null);
+  const [eventFormData, setEventFormData] = useState({
+    name: '', description: '', start_date: '', end_date: '', is_active: false
   });
 
   // --- Inline Category Creator State ---
@@ -40,13 +56,15 @@ const AdminDashboard = () => {
   // --- Custom Dropdown States ---
   const [isFormDropdownOpen, setIsFormDropdownOpen] = useState(false);
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
-  
   const formDropdownRef = useRef(null);
   const filterDropdownRef = useRef(null);
 
   const menuItems = [
     { id: 'overview', label: 'Overview', icon: <LayoutDashboard size={20} /> },
+    { id: 'orders', label: 'Manage Orders', icon: <Package size={20} /> },
+    { id: 'revenue', label: 'Revenue & Profits', icon: <DollarSign size={20} /> },
     { id: 'products', label: 'Manage Products', icon: <PackageSearch size={20} /> },
+    { id: 'events', label: 'Events & Sales', icon: <Zap size={20} /> },
     { id: 'tracking', label: 'Traffic & Visits', icon: <Activity size={20} /> },
   ];
 
@@ -62,9 +80,10 @@ const AdminDashboard = () => {
   };
 
   useEffect(() => {
-    if (activeTab === 'products') {
-      fetchData();
-    }
+    if (activeTab === 'products') fetchData();
+    if (activeTab === 'events') fetchEvents();
+    if (['tracking', 'overview', 'revenue'].includes(activeTab)) fetchTrafficStats();
+    if (activeTab === 'orders') fetchAdminOrders();
   }, [activeTab]);
 
   const fetchData = async () => {
@@ -80,14 +99,49 @@ const AdminDashboard = () => {
     }
   };
 
+  const fetchEvents = async () => {
+    try {
+      const res = await api.get('/events/', { headers: { Authorization: `Bearer ${token}` } });
+      setEvents(res.data.results || res.data);
+    } catch (error) {
+      toast.error("Failed to load events data.");
+    }
+  };
+
+  const fetchTrafficStats = async () => {
+    try {
+      const res = await api.get('/traffic-stats/', { headers: { Authorization: `Bearer ${token}` } });
+      setTrafficStats(res.data);
+    } catch (error) {
+      toast.error("Failed to load traffic stats.");
+    }
+  };
+
+  const fetchAdminOrders = async () => {
+    try {
+      const res = await api.get('/orders/', { headers: { Authorization: `Bearer ${token}` } });
+      setAdminOrders(res.data.results || res.data);
+    } catch (error) {
+      toast.error("Failed to load orders.");
+    }
+  };
+
+  const handleUpdateOrderStatus = async (orderId, newStatus) => {
+    const loadingToast = toast.loading("Updating status...");
+    try {
+      const res = await api.patch(`/orders/${orderId}/`, { status: newStatus }, { headers: { Authorization: `Bearer ${token}` } });
+      setAdminOrders(adminOrders.map(o => o.id === orderId ? res.data : o));
+      fetchTrafficStats(); 
+      toast.success("Order status updated!", { id: loadingToast });
+    } catch (error) {
+      toast.error("Failed to update status.", { id: loadingToast });
+    }
+  };
+
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (formDropdownRef.current && !formDropdownRef.current.contains(event.target)) {
-        setIsFormDropdownOpen(false);
-      }
-      if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target)) {
-        setIsFilterDropdownOpen(false);
-      }
+      if (formDropdownRef.current && !formDropdownRef.current.contains(event.target)) setIsFormDropdownOpen(false);
+      if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target)) setIsFilterDropdownOpen(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -105,6 +159,7 @@ const AdminDashboard = () => {
     }
   }, [imageFile, editingProduct]);
 
+  // --- Product Handlers ---
   const handleOpenModal = (product = null) => {
     setImageFile(null);
     setIsAddingCategory(false);
@@ -131,43 +186,33 @@ const AdminDashboard = () => {
 
   const handleDeleteProduct = async (id) => {
     if (!window.confirm("Are you sure you want to delete this product?")) return;
-    
     try {
-      await api.delete(`/products/${id}/`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.delete(`/products/${id}/`, { headers: { Authorization: `Bearer ${token}` } });
       toast.success("Product deleted successfully");
       setProducts(products.filter(p => p.id !== id));
     } catch (error) {
-      toast.error("Failed to delete product. Ensure you have admin privileges.");
+      toast.error("Failed to delete product.");
     }
   };
 
   const handleCreateCategory = async () => {
     if (!newCategoryName.trim()) return toast.error("Category name cannot be empty");
     const toastId = toast.loading("Saving category...");
-    
     try {
-      const res = await api.post('/categories/', { name: newCategoryName }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
+      const res = await api.post('/categories/', { name: newCategoryName }, { headers: { Authorization: `Bearer ${token}` } });
       setCategories([...categories, res.data]);
       setFormData({ ...formData, category: res.data.id });
       setNewCategoryName('');
       setIsAddingCategory(false);
-      
       toast.success("Category added!", { id: toastId });
     } catch (error) {
-      console.error(error);
-      toast.error("Failed to create category. Ensure you have admin rights.", { id: toastId });
+      toast.error("Failed to create category.", { id: toastId });
     }
   };
 
   const handleSaveProduct = async (e) => {
     e.preventDefault();
     if (!formData.category) return toast.error("Please select or create a category.");
-    
     const loadingToast = toast.loading(editingProduct ? "Updating product..." : "Adding product...");
     
     try {
@@ -179,18 +224,11 @@ const AdminDashboard = () => {
       submitData.append('category', formData.category);
       submitData.append('description', formData.description);
       
-      if (imageFile) {
-        submitData.append('image', imageFile);
-      }
+      if (imageFile) submitData.append('image', imageFile);
 
-      const config = { 
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data'
-        } 
-      };
-
+      const config = { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' } };
       let response;
+
       if (editingProduct) {
         response = await api.patch(`/products/${editingProduct.id}/`, submitData, config);
         toast.success("Product updated!", { id: loadingToast });
@@ -202,8 +240,72 @@ const AdminDashboard = () => {
       }
       setIsModalOpen(false);
     } catch (error) {
-      console.error(error);
       toast.error(error.response?.data?.detail || "Failed to save product.", { id: loadingToast });
+    }
+  };
+
+  // --- Event Handlers ---
+  const handleOpenEventModal = (event = null) => {
+    if (event) {
+      setEditingEvent(event);
+      const formatForInput = (isoString) => {
+        if (!isoString) return '';
+        const date = new Date(isoString);
+        return date.toISOString().slice(0, 16);
+      };
+      setEventFormData({
+        name: event.name,
+        description: event.description || '',
+        start_date: formatForInput(event.start_date),
+        end_date: formatForInput(event.end_date),
+        is_active: event.is_active
+      });
+    } else {
+      setEditingEvent(null);
+      setEventFormData({ name: '', description: '', start_date: '', end_date: '', is_active: false });
+    }
+    setIsEventModalOpen(true);
+  };
+
+  const handleSaveEvent = async (e) => {
+    e.preventDefault();
+    const loadingToast = toast.loading(editingEvent ? "Updating event..." : "Creating event...");
+    try {
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+      let response;
+      if (editingEvent) {
+        response = await api.patch(`/events/${editingEvent.id}/`, eventFormData, config);
+        toast.success("Event updated!", { id: loadingToast });
+        setEvents(events.map(ev => ev.id === editingEvent.id ? response.data : ev));
+      } else {
+        response = await api.post('/events/', eventFormData, config);
+        toast.success("Event created!", { id: loadingToast });
+        setEvents([response.data, ...events]);
+      }
+      setIsEventModalOpen(false);
+    } catch (error) {
+      toast.error("Failed to save event.", { id: loadingToast });
+    }
+  };
+
+  const handleDeleteEvent = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this event?")) return;
+    try {
+      await api.delete(`/events/${id}/`, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success("Event deleted");
+      setEvents(events.filter(ev => ev.id !== id));
+    } catch (error) {
+      toast.error("Failed to delete event.");
+    }
+  };
+
+  const handleToggleEventActive = async (event) => {
+    try {
+      const response = await api.patch(`/events/${event.id}/`, { is_active: !event.is_active }, { headers: { Authorization: `Bearer ${token}` } });
+      setEvents(events.map(ev => ev.id === event.id ? response.data : ev));
+      toast.success(`Event ${response.data.is_active ? 'activated' : 'deactivated'}`);
+    } catch (error) {
+      toast.error("Failed to toggle status");
     }
   };
 
@@ -214,7 +316,6 @@ const AdminDashboard = () => {
         return catId?.toString() === selectedCategory.toString();
       });
 
-  // PROFESSIONAL M3 INPUT STYLES
   const labelStyle = "block text-sm font-semibold text-blue-950 mb-2";
   const inputStyle = "w-full px-4 py-3.5 bg-gray-50/50 border border-gray-200 rounded-2xl outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all text-gray-900 font-medium hover:border-gray-300 placeholder-gray-400 shadow-sm";
 
@@ -222,7 +323,6 @@ const AdminDashboard = () => {
     <div className="min-h-screen bg-blue-50/30 pt-24 pb-20 px-4 sm:px-6 font-sans">
       <div className="max-w-[1400px] mx-auto">
         
-        {/* Navigation Header */}
         <div className="flex justify-between items-center mb-6 md:mb-8">
           <button 
             onClick={() => navigate(-1)}
@@ -284,19 +384,128 @@ const AdminDashboard = () => {
                       <p className="text-sm md:text-base text-gray-400 font-bold">Real-time metrics and system health.</p>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
-                      <div className="p-6 md:p-8 bg-blue-50/50 rounded-[2rem] border border-blue-100">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+                      <div 
+                        onClick={() => setActiveTab('revenue')}
+                        className="p-6 md:p-8 bg-blue-50/50 rounded-[2rem] border border-blue-100 cursor-pointer hover:bg-blue-100/50 transition-colors"
+                      >
                         <p className="font-black text-[10px] md:text-xs uppercase tracking-widest text-blue-900 mb-2 md:mb-4 flex items-center"><TrendingUp size={16} className="mr-2"/> Revenue Today</p>
-                        <p className="text-3xl md:text-4xl font-black text-blue-950">$12,450</p>
+                        <p className="text-3xl md:text-4xl font-black text-blue-950">${parseFloat(trafficStats.revenue || 0).toLocaleString()}</p>
                       </div>
                       <div className="p-6 md:p-8 bg-green-50/50 rounded-[2rem] border border-green-100">
                         <p className="font-black text-[10px] md:text-xs uppercase tracking-widest text-green-900 mb-2 md:mb-4 flex items-center"><Users size={16} className="mr-2"/> Active Visitors</p>
-                        <p className="text-3xl md:text-4xl font-black text-green-950">842</p>
+                        <p className="text-3xl md:text-4xl font-black text-green-950">{trafficStats.unique_ips}</p>
                       </div>
-                      <div className="p-6 md:p-8 bg-orange-50/50 rounded-[2rem] border border-orange-100 sm:col-span-2 md:col-span-1">
+                      <div 
+                        onClick={() => setActiveTab('orders')}
+                        className="p-6 md:p-8 bg-orange-50/50 rounded-[2rem] border border-orange-100 cursor-pointer hover:bg-orange-100/50 transition-colors"
+                      >
                         <p className="font-black text-[10px] md:text-xs uppercase tracking-widest text-orange-900 mb-2 md:mb-4 flex items-center"><ShoppingCart size={16} className="mr-2"/> Pending Orders</p>
-                        <p className="text-3xl md:text-4xl font-black text-blue-950">45</p>
+                        <p className="text-3xl md:text-4xl font-black text-blue-950">{trafficStats.pending_orders || 0}</p>
                       </div>
+                      <div 
+                        onClick={() => setActiveTab('orders')}
+                        className="p-6 md:p-8 bg-purple-50/50 rounded-[2rem] border border-purple-100 cursor-pointer hover:bg-purple-100/50 transition-colors"
+                      >
+                        <p className="font-black text-[10px] md:text-xs uppercase tracking-widest text-purple-900 mb-2 md:mb-4 flex items-center"><CheckCircle size={16} className="mr-2"/> Completed Orders</p>
+                        <p className="text-3xl md:text-4xl font-black text-blue-950">{trafficStats.completed_orders || 0}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* --- TAB: REVENUE & PROFITS --- */}
+                {activeTab === 'revenue' && (
+                  <div className="space-y-6 md:space-y-8">
+                    <div>
+                      <button onClick={() => setActiveTab('overview')} className="text-xs font-black text-gray-400 hover:text-blue-600 mb-4 flex items-center uppercase tracking-widest transition-colors"><ArrowLeft size={14} className="mr-2"/> Back to Overview</button>
+                      <h1 className="text-2xl md:text-3xl font-black text-blue-950 mb-2">Revenue & Profits</h1>
+                      <p className="text-sm md:text-base text-gray-400 font-bold">Track your financial performance over time.</p>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                       <div className="p-8 bg-blue-50/50 rounded-[2rem] border border-blue-100">
+                         <p className="font-black text-[10px] uppercase tracking-widest text-blue-900 mb-4">Daily Revenue</p>
+                         <p className="text-4xl font-black text-blue-950">${parseFloat(trafficStats.revenue || 0).toLocaleString()}</p>
+                       </div>
+                       <div className="p-8 bg-green-50/50 rounded-[2rem] border border-green-100">
+                         <p className="font-black text-[10px] uppercase tracking-widest text-green-900 mb-4">Weekly Revenue</p>
+                         <p className="text-4xl font-black text-blue-950">${parseFloat(trafficStats.revenue_weekly || 0).toLocaleString()}</p>
+                       </div>
+                       <div className="p-8 bg-purple-50/50 rounded-[2rem] border border-purple-100">
+                         <p className="font-black text-[10px] uppercase tracking-widest text-purple-900 mb-4">Monthly Revenue</p>
+                         <p className="text-4xl font-black text-blue-950">${parseFloat(trafficStats.revenue_monthly || 0).toLocaleString()}</p>
+                       </div>
+                    </div>
+
+                    <div className="bg-gray-50 rounded-[2.5rem] p-10 flex flex-col items-center justify-center border border-gray-100 min-h-[300px]">
+                       <DollarSign size={48} className="text-gray-200 mb-4" />
+                       <p className="text-gray-400 font-bold">Detailed analytics charts will populate here as more data becomes available.</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* --- TAB: ORDERS --- */}
+                {activeTab === 'orders' && (
+                  <div className="space-y-6 md:space-y-8">
+                    <div>
+                      <h1 className="text-2xl md:text-3xl font-black text-blue-950 mb-2">Order Management</h1>
+                      <p className="text-sm md:text-base text-gray-400 font-bold">Track and update customer orders.</p>
+                    </div>
+                    
+                    <div className="overflow-x-auto rounded-[2rem] border border-gray-100 bg-white shadow-sm">
+                      <table className="w-full min-w-[800px] text-left border-collapse">
+                        <thead className="bg-gray-50/50">
+                          <tr className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">
+                            <th className="py-5 px-6">Order ID</th>
+                            <th className="py-5 px-6">Date</th>
+                            <th className="py-5 px-6">Total</th>
+                            <th className="py-5 px-6">Status</th>
+                            <th className="py-5 px-6 text-right">Update Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {adminOrders.length === 0 ? (
+                            <tr>
+                              <td colSpan="5" className="text-center py-10 font-bold text-gray-400">No orders found.</td>
+                            </tr>
+                          ) : (
+                            adminOrders.map(order => (
+                              <tr key={order.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                                <td 
+                                  className="py-4 px-6 font-black text-blue-600 cursor-pointer hover:underline"
+                                  onClick={() => navigate(`/order/${order.id}`)}
+                                  title="View Order Details"
+                                >
+                                  {order.formatted_id}
+                                </td>
+                                <td className="py-4 px-6 text-sm text-gray-500 font-semibold">
+                                   {new Date(order.created_at).toLocaleDateString()}
+                                </td>
+                                <td className="py-4 px-6 font-black text-blue-600">${parseFloat(order.total_price).toFixed(2)}</td>
+                                <td className="py-4 px-6">
+                                  <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${order.status.toLowerCase() === 'delivered' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                                    {order.status}
+                                  </span>
+                                </td>
+                                <td className="py-4 px-6 text-right">
+                                  <div className="relative inline-block text-left w-full max-w-[140px] ml-auto">
+                                    <select 
+                                      value={order.status.toLowerCase()} 
+                                      onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value)}
+                                      className="w-full appearance-none bg-white border-2 border-gray-100 hover:border-blue-200 text-blue-950 text-xs font-black rounded-full px-4 py-2 pr-8 outline-none cursor-pointer focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10 transition-all shadow-sm"
+                                    >
+                                      <option value="processing">Processing</option>
+                                      <option value="delivered">Delivered</option>
+                                    </select>
+                                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 )}
@@ -365,7 +574,6 @@ const AdminDashboard = () => {
                       </div>
                     </div>
 
-                    {/* Products Table - Made horizontally scrollable on mobile safely */}
                     <div className="overflow-x-auto rounded-[2rem] border border-gray-100 bg-white shadow-sm">
                       <table className="w-full min-w-[700px] text-left border-collapse">
                         <thead className="bg-gray-50/50">
@@ -412,11 +620,91 @@ const AdminDashboard = () => {
                                     )}
                                   </div>
                                 </td>
-
                                 <td className="py-4 px-6 font-bold text-gray-500">{product.stock || product.stock_quantity || 0}</td>
                                 <td className="py-4 px-6 text-right space-x-2 whitespace-nowrap">
                                   <button onClick={() => handleOpenModal(product)} className="p-2 text-gray-400 hover:text-blue-600 transition-colors bg-white rounded-lg shadow-sm border border-gray-100"><Edit size={16}/></button>
                                   <button onClick={() => handleDeleteProduct(product.id)} className="p-2 text-gray-400 hover:text-red-600 transition-colors bg-white rounded-lg shadow-sm border border-gray-100"><Trash2 size={16}/></button>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* --- TAB: EVENTS & SALES --- */}
+                {activeTab === 'events' && (
+                  <div className="space-y-6 md:space-y-8">
+                    <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-4">
+                      <div>
+                        <h1 className="text-2xl md:text-3xl font-black text-blue-950 mb-2">Events & Flash Sales</h1>
+                        <p className="text-sm md:text-base text-gray-400 font-bold">Manage your active banners and countdown timers.</p>
+                      </div>
+                      <button 
+                        onClick={() => handleOpenEventModal()}
+                        className="w-full sm:w-auto bg-blue-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all flex items-center justify-center shrink-0"
+                      >
+                        <Plus size={18} className="mr-2" /> Create Event
+                      </button>
+                    </div>
+
+                    <div className="overflow-x-auto rounded-[2rem] border border-gray-100 bg-white shadow-sm">
+                      <table className="w-full min-w-[700px] text-left border-collapse">
+                        <thead className="bg-gray-50/50">
+                          <tr className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">
+                            <th className="py-5 px-6">Event Name</th>
+                            <th className="py-5 px-6">Status</th>
+                            <th className="py-5 px-6">End Date</th>
+                            <th className="py-5 px-6 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {events.length === 0 ? (
+                            <tr>
+                              <td colSpan="4" className="text-center py-10 font-bold text-gray-400">No events found. Create one to run a flash sale!</td>
+                            </tr>
+                          ) : (
+                            events.map(event => (
+                              <tr key={event.id} className={`border-b border-gray-50 hover:bg-gray-50/50 transition-colors ${event.is_active ? 'bg-blue-50/20' : ''}`}>
+                                <td className="py-4 px-6">
+                                  <div className="flex items-center gap-3">
+                                    <div className={`p-2 rounded-lg ${event.is_active ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-400'}`}>
+                                      <Zap size={16} />
+                                    </div>
+                                    <div>
+                                      <span className="font-bold text-blue-950 block">{event.name}</span>
+                                      <span className="text-[10px] text-gray-500 font-semibold truncate max-w-[200px] block">{event.description}</span>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="py-4 px-6">
+                                  <label className="flex items-center cursor-pointer">
+                                    <div className="relative">
+                                      <input 
+                                        type="checkbox" 
+                                        className="sr-only" 
+                                        checked={event.is_active}
+                                        onChange={() => handleToggleEventActive(event)}
+                                      />
+                                      <div className={`block w-10 h-6 rounded-full transition-colors ${event.is_active ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                                      <div className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${event.is_active ? 'translate-x-4' : ''}`}></div>
+                                    </div>
+                                    <span className={`ml-3 text-xs font-bold uppercase tracking-widest ${event.is_active ? 'text-green-600' : 'text-gray-400'}`}>
+                                      {event.is_active ? 'Active' : 'Inactive'}
+                                    </span>
+                                  </label>
+                                </td>
+                                <td className="py-4 px-6">
+                                  <div className="flex items-center gap-2 text-gray-500 font-bold text-sm">
+                                    <Calendar size={14} />
+                                    {new Date(event.end_date).toLocaleString()}
+                                  </div>
+                                </td>
+                                <td className="py-4 px-6 text-right space-x-2 whitespace-nowrap">
+                                  <button onClick={() => handleOpenEventModal(event)} className="p-2 text-gray-400 hover:text-blue-600 transition-colors bg-white rounded-lg shadow-sm border border-gray-100"><Edit size={16}/></button>
+                                  <button onClick={() => handleDeleteEvent(event.id)} className="p-2 text-gray-400 hover:text-red-600 transition-colors bg-white rounded-lg shadow-sm border border-gray-100"><Trash2 size={16}/></button>
                                 </td>
                               </tr>
                             ))
@@ -434,19 +722,19 @@ const AdminDashboard = () => {
                       <h1 className="text-2xl md:text-3xl font-black text-blue-950 mb-2">Website Traffic</h1>
                       <p className="text-sm md:text-base text-gray-400 font-bold">Live visitor tracking and page analytics.</p>
                     </div>
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
                       <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100">
                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Top Page Today</p>
-                        <p className="text-lg md:text-xl font-bold text-blue-900 truncate">/category/electronics</p>
+                        <p className="text-lg md:text-xl font-bold text-blue-900 truncate">{trafficStats.top_page}</p>
                       </div>
                       <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100">
                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Unique IPs (24h)</p>
-                        <p className="text-lg md:text-xl font-bold text-blue-900">14,209</p>
+                        <p className="text-lg md:text-xl font-bold text-blue-900">{trafficStats.unique_ips}</p>
                       </div>
                     </div>
                   </div>
                 )}
-
               </motion.div>
             </AnimatePresence>
           </main>
@@ -541,7 +829,7 @@ const AdminDashboard = () => {
                            />
                            <button 
                              type="button" 
-                             onClick={handleCreateCategory} 
+                             onClick={handleCreateCategory}
                              className="bg-blue-600 text-white px-5 py-3.5 rounded-2xl font-bold text-sm hover:bg-blue-700 transition-all shadow-sm flex items-center shrink-0"
                            >
                              <Check size={18} className="mr-1"/> Save
@@ -582,8 +870,8 @@ const AdminDashboard = () => {
                                       }}
                                       className={`px-5 py-3 text-sm font-semibold transition-colors flex items-center gap-3 cursor-pointer ${
                                         formData.category?.toString() === cat.id?.toString() 
-                                        ? "bg-blue-50 text-blue-700" 
-                                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                                          ? "bg-blue-50 text-blue-700" 
+                                          : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                                       }`}
                                     >
                                       <span className="bg-white p-2 rounded-xl shadow-sm border border-gray-50">
@@ -613,7 +901,6 @@ const AdminDashboard = () => {
                         />
                       </div>
                     </div>
-
                     <div>
                       <label className={labelStyle}>Discount (%)</label>
                       <div className="relative">
@@ -625,7 +912,6 @@ const AdminDashboard = () => {
                         <span className="absolute right-4 top-3.5 text-gray-400 font-semibold">%</span>
                       </div>
                     </div>
-
                     <div>
                       <label className={labelStyle}>Stock Quantity</label>
                       <input 
@@ -660,6 +946,98 @@ const AdminDashboard = () => {
         )}
       </AnimatePresence>
 
+      {/* --- ADD / EDIT EVENT MODAL --- */}
+      <AnimatePresence>
+        {isEventModalOpen && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-blue-950/40 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="bg-white w-full max-w-2xl max-h-[90vh] flex flex-col rounded-[2.5rem] shadow-2xl overflow-hidden"
+            >
+              <div className="flex items-center justify-between p-6 md:px-8 md:py-6 border-b border-gray-100 bg-white/90 backdrop-blur-md shrink-0">
+                <h2 className="text-2xl font-black text-blue-950 flex items-center">
+                  <Zap size={24} className="text-red-500 mr-2" />
+                  {editingEvent ? 'Edit Event' : 'New Flash Event'}
+                </h2>
+                <button type="button" onClick={() => setIsEventModalOpen(false)} className="p-2.5 bg-gray-50 text-gray-400 rounded-full hover:bg-gray-100 hover:text-blue-900 transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="overflow-y-auto flex-1 custom-scrollbar">
+                <form onSubmit={handleSaveEvent} className="p-6 md:p-8 space-y-6">
+                  
+                  <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100 mb-2">
+                    <label className="flex items-center cursor-pointer justify-between">
+                      <span className="font-bold text-blue-950 text-sm">Activate on Homepage?</span>
+                      <div className="relative">
+                        <input 
+                          type="checkbox" 
+                          className="sr-only" 
+                          checked={eventFormData.is_active}
+                          onChange={(e) => setEventFormData({...eventFormData, is_active: e.target.checked})}
+                        />
+                        <div className={`block w-12 h-7 rounded-full transition-colors ${eventFormData.is_active ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                        <div className={`absolute left-1 top-1 bg-white w-5 h-5 rounded-full transition-transform ${eventFormData.is_active ? 'translate-x-5' : ''}`}></div>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div>
+                    <label className={labelStyle}>Event Name</label>
+                    <input 
+                      required type="text" placeholder="e.g. Weekend Blowout"
+                      value={eventFormData.name} onChange={(e) => setEventFormData({...eventFormData, name: e.target.value})}
+                      className={inputStyle} 
+                    />
+                  </div>
+
+                  <div>
+                    <label className={labelStyle}>Promotion Text (Subheading)</label>
+                    <input 
+                      type="text" placeholder="e.g. Up to 60% Off Sitewide."
+                      value={eventFormData.description} onChange={(e) => setEventFormData({...eventFormData, description: e.target.value})}
+                      className={inputStyle} 
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div>
+                      <label className={labelStyle}>Start Date & Time</label>
+                      <input 
+                        required type="datetime-local"
+                        value={eventFormData.start_date} onChange={(e) => setEventFormData({...eventFormData, start_date: e.target.value})}
+                        className={inputStyle} 
+                      />
+                    </div>
+                    <div>
+                      <label className={labelStyle}>End Date & Time</label>
+                      <input 
+                        required type="datetime-local"
+                        value={eventFormData.end_date} onChange={(e) => setEventFormData({...eventFormData, end_date: e.target.value})}
+                        className={inputStyle} 
+                      />
+                    </div>
+                  </div>
+
+                </form>
+              </div>
+
+              <div className="p-6 md:px-8 md:py-6 bg-gray-50/50 border-t border-gray-100 flex flex-col sm:flex-row justify-end gap-3 sm:gap-4 shrink-0 rounded-b-[2.5rem]">
+                <button type="button" onClick={() => setIsEventModalOpen(false)} className="w-full sm:w-auto px-6 py-3.5 rounded-2xl font-bold text-sm text-gray-600 bg-white border border-gray-200 hover:bg-gray-50 transition-colors shadow-sm">
+                  Cancel
+                </button>
+                <button onClick={handleSaveEvent} type="submit" className="w-full sm:w-auto bg-blue-600 text-white px-8 py-3.5 rounded-2xl font-bold text-sm shadow-lg shadow-blue-600/20 hover:bg-blue-700 hover:-translate-y-0.5 transition-all">
+                  {editingEvent ? 'Save Event' : 'Create Event'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

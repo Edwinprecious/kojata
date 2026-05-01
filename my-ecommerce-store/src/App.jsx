@@ -10,6 +10,7 @@ import Footer from './components/ui/Footer';
 import CartDrawer from './features/cart/CartDrawer';
 import { fetchAndMergeCart, syncCartWithBackend } from './features/cart/CartSlice';
 import { fetchWishlist, clearWishlist } from './features/wishlist/wishlistSlice';
+import api from './services/api';
 
 // Main Store Pages
 import Home from './pages/Home';
@@ -24,8 +25,9 @@ import VerifyEmail from './pages/VerifyEmail';
 import Profile from './pages/Profile';
 import Wishlist from './pages/Wishlist';
 import OrderHistory from './pages/OrderHistory';
+import OrderTracking from './pages/OrderTracking'; // ADDED THIS IMPORT
 import Deals from './pages/Deals';
-import AdminDashboard from './pages/AdminDashboard'; 
+import AdminDashboard from './pages/AdminDashboard';
 
 // Support & Legal Pages
 import About from './pages/support/About';
@@ -39,26 +41,20 @@ import Returns from './pages/support/Returns';
 import Contact from './pages/support/Contact';
 import SizeGuide from './pages/support/SizeGuide';
 
-// --- NEW: Scroll To Top Component ---
-const ScrollToTop = () => {
-  const { pathname } = useLocation();
-
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [pathname]);
-
-  return null;
-};
-// ------------------------------------
-
 const MainLayout = ({ children }) => {
   const location = useLocation();
+
+  useEffect(() => {
+    // Silently track visits on every route change
+    api.post('/track-visit/', { page_url: location.pathname }).catch(() => {});
+  }, [location.pathname]);
+
   return (
     <div className="flex flex-col min-h-screen bg-white font-sans selection:bg-blue-100">
       <Navbar />
       <CartDrawer />
       <main className="flex-grow pt-20">
-        <AnimatePresence mode="wait">
+        <AnimatePresence mode="wait" onExitComplete={() => window.scrollTo(0, 0)}>
           <div key={location.pathname}>
             {children}
           </div>
@@ -80,7 +76,6 @@ function App() {
   const { items } = useSelector((state) => state.cart);
   const isInitialMount = useRef(true);
 
-  // 1. Fetch Cart & Wishlist on Login, Clear on Logout
   useEffect(() => {
     if (isAuthenticated) {
       dispatch(fetchAndMergeCart());
@@ -90,24 +85,23 @@ function App() {
     }
   }, [isAuthenticated, dispatch]);
 
-  // 2. Sync changes to Database automatically 
   useEffect(() => {
     if (isInitialMount.current) {
        isInitialMount.current = false;
        return;
     }
+    
     if (isAuthenticated) {
       const timeoutId = setTimeout(() => {
          dispatch(syncCartWithBackend());
       }, 500); 
+
       return () => clearTimeout(timeoutId);
     }
   }, [items, isAuthenticated, dispatch]);
 
   return (
     <Router>
-      <ScrollToTop /> {/* <--- ADDED HERE: Forces window to top on every route change */}
-      
       <Toaster 
         position="bottom-center"
         toastOptions={{
@@ -130,17 +124,18 @@ function App() {
           },
         }}
       />
-
       <Routes>
         <Route path="/signin" element={<SignIn />} />
         <Route path="/signup" element={<SignUp />} />
         <Route path="/verify-email/:uid/:token" element={<VerifyEmail />} />
-
         <Route path="/profile" element={<ProtectedRoute><MainLayout><Profile /></MainLayout></ProtectedRoute>} />
         <Route path="/orders" element={<ProtectedRoute><MainLayout><OrderHistory /></MainLayout></ProtectedRoute>} />
         <Route path="/checkout" element={<ProtectedRoute><MainLayout><Checkout /></MainLayout></ProtectedRoute>} />
         <Route path="/wishlist" element={<ProtectedRoute><MainLayout><Wishlist /></MainLayout></ProtectedRoute>} />
         <Route path="/admin-dashboard" element={<ProtectedRoute><MainLayout><AdminDashboard /></MainLayout></ProtectedRoute>} />
+        
+        {/* ADDED ORDER TRACKING ROUTE */}
+        <Route path="/order/:id" element={<ProtectedRoute><MainLayout><OrderTracking /></MainLayout></ProtectedRoute>} />
 
         <Route path="/" element={<MainLayout><Home /></MainLayout>} />
         <Route path="/live" element={<MainLayout><LiveShowPage /></MainLayout>} />
@@ -148,7 +143,7 @@ function App() {
         <Route path="/cart" element={<MainLayout><Cart /></MainLayout>} />
         <Route path="/category/:slug" element={<MainLayout><CategoryPage /></MainLayout>} />
         <Route path="/deals" element={<MainLayout><Deals /></MainLayout>} />
-
+        
         <Route path="/about" element={<MainLayout><About /></MainLayout>} />
         <Route path="/careers" element={<MainLayout><Careers /></MainLayout>} />
         <Route path="/press" element={<MainLayout><Press /></MainLayout>} />

@@ -1,4 +1,3 @@
-# api/urls.py
 from django.urls import path
 from . import views
 
@@ -14,9 +13,19 @@ urlpatterns = [
     path('google-auth/', views.google_auth, name='google-auth'),
     path('change-password/', views.ChangePasswordView.as_view(), name='change-password'),
     path('merge-cart/', views.merge_cart, name='merge-cart'),
+    path('checkout/', views.CheckoutView.as_view(), name='checkout'),
+    path('orders/', views.OrderListAPIView.as_view(), name='order-list'),
+    path('orders/<int:pk>/', views.OrderDetailAPIView.as_view(), name='order-detail'),
     path('wishlist/', views.WishlistAPIView.as_view(), name='wishlist-list'),
     path('wishlist/<int:pk>/', views.WishlistDetailAPIView.as_view(), name='wishlist-detail'),
     
-    # --- ADDED THIS LINE BELOW ---
     path('livestream/status/', views.livestream_status, name='livestream-status'),
+    
+    path('events/', views.EventList.as_view(), name='event-list'),
+    path('events/<int:pk>/', views.EventDetail.as_view(), name='event-detail'),
+    path('events/active/', views.active_event, name='active-event'),
+    
+    # --- TRAFFIC ROUTES ---
+    path('track-visit/', views.track_visit, name='track-visit'),
+    path('traffic-stats/', views.traffic_stats, name='traffic-stats'),
 ]

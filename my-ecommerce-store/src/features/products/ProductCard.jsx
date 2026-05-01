@@ -10,9 +10,8 @@ import toast from 'react-hot-toast';
 const ProductCard = ({ product = {} }) => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  
+
   const p = product?.product ? product.product : product;
-  
   const { isAdmin, isAuthenticated } = useSelector((state) => state.auth);
   const wishlistItems = useSelector((state) => state.wishlist.items); 
   
@@ -30,14 +29,16 @@ const ProductCard = ({ product = {} }) => {
   const currentPrice = parseFloat(calculatedPrice) || 0;
   const originalPrice = parseFloat(rawOriginalPrice) || 0;
   const stock = parseInt(p.stock ?? p.stock_quantity ?? 0, 10) || 0;
-  
   const categoryName = p.category_name || (typeof p.category === 'object' ? p.category?.name : null) || 'Uncategorized';
   
   const hasDiscount = originalPrice > currentPrice && originalPrice > 0;
   const discountPercentage = p.discount_percentage || (hasDiscount ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) : 0);
-
+  
   const visualMaxStock = 50; 
   const stockBarWidth = Math.min(100, (stock / visualMaxStock) * 100);
+
+  // Dynamic Rating extraction
+  const rating = parseFloat(p.rating) || 0.0;
 
   return (
     <motion.div 
@@ -58,7 +59,7 @@ const ProductCard = ({ product = {} }) => {
       {!isAdmin && (
         <button 
           onClick={(e) => {
-            e.stopPropagation(); 
+            e.stopPropagation();
             
             if (!isAuthenticated) {
               toast.error("Sign in to add to wishlist");
@@ -76,8 +77,8 @@ const ProductCard = ({ product = {} }) => {
           }}
           className={`absolute top-4 right-4 z-20 p-2.5 rounded-full backdrop-blur-md transition-all shadow-sm ${
              isInWishlist 
-               ? 'bg-pink-50 text-pink-500' 
-               : 'bg-white/80 text-gray-400 hover:text-pink-500 hover:bg-white'
+                ? 'bg-pink-50 text-pink-500' 
+                : 'bg-white/80 text-gray-400 hover:text-pink-500 hover:bg-white'
           }`}
         >
           <Heart size={16} fill={isInWishlist ? "currentColor" : "none"} />
@@ -101,9 +102,17 @@ const ProductCard = ({ product = {} }) => {
           {p.name || "Product Name"}
         </h3>
         
+        {/* --- DYNAMIC RATING SECTION --- */}
         <div className="flex items-center text-yellow-400 space-x-1">
-          {[...Array(5)].map((_, i) => <Star key={i} size={12} fill="currentColor"/>)}
-          <span className="text-gray-300 text-xs">(0)</span>
+          {[...Array(5)].map((_, i) => (
+            <Star 
+              key={i} 
+              size={12} 
+              fill={i < Math.floor(rating) ? "currentColor" : "none"} 
+              className={i < Math.floor(rating) ? "text-yellow-400" : "text-gray-200"}
+            />
+          ))}
+          <span className="text-gray-400 text-[10px] font-bold ml-1">{rating.toFixed(1)}</span>
         </div>
         
         <div className="pt-2 mt-auto">
@@ -113,6 +122,7 @@ const ProductCard = ({ product = {} }) => {
             </p>
             {stock > 0 && stock <= 10 && <p className="text-red-500">Low Stock!</p>}
           </div>
+
           <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
             <div 
               className={`h-full ${stock > 10 ? 'bg-blue-600' : 'bg-red-500'} transition-all`} 
@@ -142,7 +152,7 @@ const ProductCard = ({ product = {} }) => {
           {!isAdmin && (
             <button 
               onClick={(e) => {
-                e.stopPropagation(); 
+                e.stopPropagation();
                 dispatch(addToCart({ ...p, quantity: 1 }));
               }}
               className="bg-blue-900 text-white p-3 rounded-xl hover:bg-blue-600 transition-colors shrink-0 shadow-sm"

@@ -13,11 +13,9 @@ import api from '../services/api';
 import { logout } from '../features/auth/authSlice'; 
 import ProductCard from '../features/products/ProductCard'; 
 
-// --- VANILLA LEAFLET IMPORTS ---
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
-// Fix for default marker icons missing in Webpack/Vite
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
@@ -25,7 +23,6 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-// --- CUSTOM FIXED-CENTER LEAFLET COMPONENT ---
 const LeafletMap = ({ lat, lng, onMapMoveEnd }) => {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -33,10 +30,8 @@ const LeafletMap = ({ lat, lng, onMapMoveEnd }) => {
 
   useEffect(() => {
     if (!mapContainerRef.current) return;
-
     if (!mapInstanceRef.current) {
       mapInstanceRef.current = L.map(mapContainerRef.current).setView([lat, lng], 16);
-
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap',
         maxZoom: 19
@@ -51,7 +46,6 @@ const LeafletMap = ({ lat, lng, onMapMoveEnd }) => {
         onMapMoveEnd(center.lat, center.lng);
       });
     }
-
     return () => {
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
@@ -65,7 +59,6 @@ const LeafletMap = ({ lat, lng, onMapMoveEnd }) => {
       const currentPos = mapInstanceRef.current.getCenter();
       const latDiff = Math.abs(currentPos.lat - lat);
       const lngDiff = Math.abs(currentPos.lng - lng);
-
       if (latDiff > 0.0001 || lngDiff > 0.0001) {
         isProgrammaticMove.current = true;
         mapInstanceRef.current.setView([lat, lng], 16, { animate: false });
@@ -91,27 +84,24 @@ const LeafletMap = ({ lat, lng, onMapMoveEnd }) => {
     </div>
   );
 };
-// ----------------------------------------
 
 const Profile = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [user, setUser] = useState({ username: 'Loading...', email: 'Loading...' });
   const [isLoading, setIsLoading] = useState(true);
-  
   const [profileImage, setProfileImage] = useState(null);
   const fileInputRef = useRef(null);
-  
   const [isEditingPassword, setIsEditingPassword] = useState(false);
   const [passwords, setPasswords] = useState({ current: '', new: '', confirm: '' });
-  
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [isFetchingLocation, setIsFetchingLocation] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState([]); 
+  const [orders, setOrders] = useState([]);
+  
   const [newAddress, setNewAddress] = useState({
     street: '', city: '', state: '', zip: '', lat: 6.5244, lng: 3.3792
   });
-
-  // --- NEW: Ref to hold the debounce timer ---
+  
   const geocodeTimeoutRef = useRef(null);
 
   const { token, isAuthenticated, isAdmin } = useSelector((state) => state.auth);
@@ -149,6 +139,7 @@ const Profile = () => {
         
         if (fetchedUser.profile_image) setProfileImage(fetchedUser.profile_image);
         if (fetchedUser.addresses) setSavedAddresses(fetchedUser.addresses);
+        if (fetchedUser.orders) setOrders(fetchedUser.orders);
         
         setIsLoading(false);
       } catch (error) {
@@ -162,10 +153,8 @@ const Profile = () => {
         }
       }
     };
-
     fetchUserProfile();
     
-    // Cleanup the timeout if the component unmounts
     return () => {
       if (geocodeTimeoutRef.current) clearTimeout(geocodeTimeoutRef.current);
     };
@@ -174,7 +163,6 @@ const Profile = () => {
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
     const loadingToast = toast.loading("Uploading image...");
     const formData = new FormData();
     formData.append('profile_image', file);
@@ -217,6 +205,7 @@ const Profile = () => {
         async (position) => {
           const { latitude, longitude } = position.coords;
           setNewAddress(prev => ({ ...prev, lat: latitude, lng: longitude }));
+
           try {
             const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
             const data = await response.json();
@@ -247,17 +236,13 @@ const Profile = () => {
     }
   };
 
-  // --- UPDATED: Debounced Map Move Handler ---
   const handleMapMoveEnd = (lat, lng) => {
-    // 1. Instantly update the coordinates so the map visual stays in sync
     setNewAddress(prev => ({ ...prev, lat, lng }));
     
-    // 2. Clear any existing timer because the user is still moving the map
     if (geocodeTimeoutRef.current) {
       clearTimeout(geocodeTimeoutRef.current);
     }
-
-    // 3. Start a new 1-second timer. If it finishes without being cleared, fetch the address.
+    
     geocodeTimeoutRef.current = setTimeout(async () => {
       const loadingToast = toast.loading("Finding street address...", { duration: 1500 });
       try {
@@ -279,7 +264,7 @@ const Profile = () => {
       } catch (error) {
         toast.error("Network error. Enter details manually.", { id: loadingToast });
       }
-    }, 1000); // Wait 1000ms (1 second)
+    }, 1000); 
   };
 
   const handleSaveAddress = async (e) => {
@@ -354,7 +339,6 @@ const Profile = () => {
                   <Camera size={16} />
                 </button>
               </div>
-
               <h2 className="text-xl font-black text-blue-950 capitalize">{user.username}</h2>
               <p className="text-sm font-bold text-gray-400 truncate mb-4">{user.email}</p>
               
@@ -391,13 +375,13 @@ const Profile = () => {
 
                     {!isAdmin && (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="p-8 bg-blue-50/50 rounded-[2rem] border border-blue-100">
+                        <button onClick={() => setActiveTab('orders')} className="p-8 bg-blue-50/50 rounded-[2rem] border border-blue-100 hover:bg-blue-100 transition-colors block cursor-pointer group text-left w-full">
                           <div className="flex items-center gap-4 mb-4">
-                            <div className="p-3 bg-white rounded-xl text-blue-600 shadow-sm"><Package size={20} /></div>
+                            <div className="p-3 bg-white rounded-xl text-blue-600 shadow-sm group-hover:scale-110 transition-transform"><Package size={20} /></div>
                             <span className="font-black text-xs uppercase tracking-widest text-blue-900">Total Orders</span>
                           </div>
-                          <p className="text-4xl font-black text-blue-950">0</p>
-                        </div>
+                          <p className="text-4xl font-black text-blue-950">{orders.length}</p>
+                        </button>
                         
                         <Link to="/cart" className="p-8 bg-blue-50/50 rounded-[2rem] border border-blue-100 hover:bg-blue-100 transition-colors block cursor-pointer group">
                           <div className="flex items-center gap-4 mb-4">
@@ -447,10 +431,41 @@ const Profile = () => {
                 {!isAdmin && activeTab === 'orders' && (
                   <div className="space-y-6">
                      <h1 className="text-3xl font-black text-blue-950">Order History</h1>
-                     <div className="p-16 md:p-20 text-center space-y-4 bg-gray-50/50 rounded-[2rem] border border-gray-100 mt-6">
-                        <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto text-gray-300 shadow-sm"><Package size={32} /></div>
-                        <h3 className="text-xl font-black text-blue-950">No orders yet</h3>
-                     </div>
+                     
+                     {orders.length === 0 ? (
+                       <div className="p-16 md:p-20 text-center space-y-4 bg-gray-50/50 rounded-[2rem] border border-gray-100 mt-6">
+                          <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto text-gray-300 shadow-sm"><Package size={32} /></div>
+                          <h3 className="text-xl font-black text-blue-950">No orders yet</h3>
+                       </div>
+                     ) : (
+                       <div className="space-y-4 mt-6">
+                         {orders.map((order) => (
+                           <div key={order.id} onClick={() => navigate(`/order/${order.raw_id}`)} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm hover:border-blue-100 hover:shadow-md transition-all flex flex-col md:flex-row items-center justify-between gap-6 cursor-pointer group">
+                             <div className="flex items-center gap-6 w-full md:w-auto">
+                               <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center shrink-0">
+                                 <Package size={24} />
+                               </div>
+                               <div>
+                                 <h3 className="font-black text-blue-950 text-sm">Order {order.id}</h3>
+                                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">{order.created_at} &bull; {order.items} Items</p>
+                               </div>
+                             </div>
+                             <div className="flex items-center justify-between w-full md:w-auto md:gap-10">
+                               <div className="text-left md:text-right">
+                                 <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Total Amount</p>
+                                 <p className="text-lg font-black text-blue-900">${order.total_price.toFixed(2)}</p>
+                               </div>
+                               <div className={`px-4 py-2 rounded-full flex items-center gap-2 ${
+                                 order.status === 'Delivered' ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-600'
+                               }`}>
+                                 <span className="text-[10px] font-black uppercase tracking-widest">{order.status}</span>
+                               </div>
+                               <ChevronRight size={18} className="text-gray-300 group-hover:text-blue-600 transition-colors hidden md:block" />
+                             </div>
+                           </div>
+                         ))}
+                       </div>
+                     )}
                   </div>
                 )}
 
@@ -582,7 +597,6 @@ const Profile = () => {
                   </div>
                   <p className="text-[9px] font-bold text-orange-500 mt-2 ml-1">* GPS/Pin accuracy may vary. Please review and edit your street name if needed.</p>
                 </div>
-
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">City</label>
@@ -593,19 +607,16 @@ const Profile = () => {
                     <input type="text" required value={newAddress.state} onChange={(e) => setNewAddress({...newAddress, state: e.target.value})} placeholder="State" className="w-full px-4 py-3 rounded-xl border border-gray-100 bg-white outline-none focus:border-blue-500 transition-all font-semibold text-blue-950" />
                   </div>
                 </div>
-
                 <div className="grid grid-cols-2 gap-4">
                    <div>
                     <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Zip Code</label>
                     <input type="text" value={newAddress.zip} onChange={(e) => setNewAddress({...newAddress, zip: e.target.value})} placeholder="ZIP (Optional)" className="w-full px-4 py-3 rounded-xl border border-gray-100 bg-white outline-none focus:border-blue-500 transition-all font-semibold text-blue-950" />
                   </div>
                 </div>
-
                 <button type="submit" className="mt-8 bg-blue-600 text-white rounded-2xl w-full !py-4 font-black text-xs tracking-widest uppercase shadow-xl shadow-blue-600/20 hover:bg-blue-700 transition-colors">
                   Save Address
                 </button>
               </form>
-
             </motion.div>
           </div>
         )}

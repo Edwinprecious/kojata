@@ -4,11 +4,10 @@ from dotenv import load_dotenv
 from datetime import timedelta
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-
 SECRET_KEY = 'django-insecure-b70acfs@9s*=!qq0f88v9+)m=)tt1d*h0sv@y&6^wb3lrk-=g@'
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '.loca.lt','.trycloudflare.com']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '.loca.lt', '.trycloudflare.com']
 
 INSTALLED_APPS = [
     'corsheaders',
@@ -35,7 +34,6 @@ MIDDLEWARE = [
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True
-
 ROOT_URLCONF = 'core.urls'
 
 TEMPLATES = [
@@ -67,27 +65,17 @@ DATABASES = {
 }
 
 AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
-
 STATIC_URL = 'static/'
-
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
@@ -101,6 +89,7 @@ EMAIL_HOST_USER = os.getenv('EMAIL_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_PASSWORD')
 DEFAULT_FROM_EMAIL = f"ShopWave <{os.getenv('EMAIL_USER')}>"
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
 GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
 
 REST_FRAMEWORK = {
@@ -111,8 +100,11 @@ REST_FRAMEWORK = {
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=30),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=60),   
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=60),
     'ROTATE_REFRESH_TOKENS': False,
     'BLACKLIST_AFTER_ROTATION': True,
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
+
+# --- FIX: Update COOP to allow OAuth popups to communicate seamlessly ---
+SECURE_CROSS_ORIGIN_OPENER_POLICY = 'unsafe-none'
