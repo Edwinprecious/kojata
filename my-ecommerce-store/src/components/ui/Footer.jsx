@@ -73,7 +73,7 @@ const Footer = () => {
             </p>
             <div className="flex gap-4 pt-2">
                <span className="hover:text-blue-500 transition-colors cursor-pointer"><Instagram /></span>
-               <span className="hover:text-blue-500 transition-colors cursor-pointer"><Twitter /></span>
+               <span className="hover:text-blue-500 transition-colors cursor-pointer"><Twitter/></span>
                <span className="hover:text-blue-500 transition-colors cursor-pointer"><Facebook /></span>
                <span className="hover:text-blue-500 transition-colors cursor-pointer"><Youtube /></span>
             </div>
@@ -96,8 +96,8 @@ const Footer = () => {
             <h3 className="text-white font-black text-[10px] sm:text-xs uppercase tracking-[0.2em] mb-4 sm:mb-5">Company</h3>
             <ul className="space-y-2 text-xs sm:text-sm font-bold">
               <li><Link to="/about" className="hover:text-white transition-colors">About Us</Link></li>
-              <li><Link to="/careers" className="hover:text-white transition-colors">Careers</Link></li>
-              <li><Link to="/press" className="hover:text-white transition-colors">Press</Link></li>
+              {/* <li><Link to="/careers" className="hover:text-white transition-colors">Careers</Link></li> */}
+              {/* <li><Link to="/press" className="hover:text-white transition-colors">Press</Link></li> */}
               <li><Link to="/terms" className="hover:text-white transition-colors">Terms of Service</Link></li>
               <li><Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
             </ul>

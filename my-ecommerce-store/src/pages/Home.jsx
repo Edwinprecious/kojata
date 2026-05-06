@@ -11,6 +11,7 @@ import LiveShowSection from '../features/livestream/LiveShowSection';
 import Testimonials from '../features/products/Testimonials';
 import Hero from '../components/home/Hero';
 import ProductCard from '../features/products/ProductCard';
+import Carousel from '../components/common/Carousel'; // Imported Carousel component
 import api from '../services/api';
 
 const Home = () => {
@@ -19,7 +20,7 @@ const Home = () => {
   const [newArrivals, setNewArrivals] = useState([]);
   const [hotSales, setHotSales] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  
+
   // --- Timer & Event States ---
   const [activeEvent, setActiveEvent] = useState(null);
   const [timeLeft, setTimeLeft] = useState({ days: '0', hours: '00', minutes: '00', seconds: '00' });
@@ -39,9 +40,11 @@ const Home = () => {
           // New Arrivals: Default backend sorting is by -id (newest first)
           setNewArrivals(products.slice(0, 4));
 
-          // Hot Sales: Sort by highest dynamic rating
-          const sortedByRating = [...products].sort((a, b) => parseFloat(b.rating || 0) - parseFloat(a.rating || 0));
-          setHotSales(sortedByRating.slice(0, 4));
+          // Hot Sales: Sort by actual sales_count from the backend
+          const sortedBySales = [...products].sort((a, b) => parseInt(b.sales_count || 0) - parseInt(a.sales_count || 0));
+          
+          // Set to 8 items to populate the carousel effectively
+          setHotSales(sortedBySales.slice(0, 8));
 
           // Categories processing
           const catMap = {};
@@ -194,6 +197,7 @@ const Home = () => {
                 </div>
               </div>
             </div>
+
             <div className="relative z-10 shrink-0">
               <Link 
                 to="/deals" 
@@ -215,6 +219,7 @@ const Home = () => {
           <div className="lg:col-span-1 space-y-6">
             <p className="text-blue-600 font-bold text-xs md:text-sm uppercase tracking-widest">Live Activity</p>
             <h2 className="text-3xl md:text-4xl font-bold text-blue-900 leading-tight">What's happening right now</h2>
+            
             <div className="bg-white p-6 rounded-3xl border border-gray-100 space-y-6 shadow-sm">
               <div className="flex items-center space-x-4">
                 <div className="p-4 bg-blue-50 rounded-2xl"><Package className="text-blue-600" size={28}/></div>
@@ -234,6 +239,7 @@ const Home = () => {
               </p>
               <p className="text-[10px] text-gray-400 font-bold uppercase">Updates every few seconds</p>
             </div>
+            
             <div className="space-y-3">
                <div className="bg-white p-5 rounded-2xl border border-gray-100 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex items-center space-x-4">
@@ -344,10 +350,8 @@ const Home = () => {
              <p className="text-gray-400 font-bold text-xs">No trending products found.</p>
            </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
-            {hotSales.map((product) => (
-              <ProductCard key={`hot-${product.id}`} product={product} />
-            ))}
+          <div className="w-full relative">
+            <Carousel items={hotSales} />
           </div>
         )}
       </section>
@@ -385,7 +389,7 @@ const Home = () => {
       {/* 8. TESTIMONIALS */}
       <Testimonials />
 
-      {/* 9. GLOBAL STATS (Moved to the bottom as a final trust signal) */}
+      {/* 9. GLOBAL STATS */}
       <section className="bg-blue-900 text-white py-12 md:py-16">
         <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12 text-center">
           <div><h2 className="text-3xl md:text-5xl font-bold">2.4M+</h2><p className="text-blue-200 text-xs md:text-sm opacity-70 mt-1">Happy Customers</p></div>
@@ -394,7 +398,6 @@ const Home = () => {
           <div><h2 className="text-3xl md:text-5xl font-bold">50K+</h2><p className="text-blue-200 text-xs md:text-sm opacity-70 mt-1">Products</p></div>
         </div>
       </section>
-
     </main>
   );
 };

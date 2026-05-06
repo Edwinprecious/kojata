@@ -43,6 +43,7 @@ const LeafletMap = ({ lat, lng, onMapMoveEnd }) => {
         onMapMoveEnd(center.lat, center.lng);
       });
     }
+
     return () => {
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
@@ -56,6 +57,7 @@ const LeafletMap = ({ lat, lng, onMapMoveEnd }) => {
       const currentPos = mapInstanceRef.current.getCenter();
       const latDiff = Math.abs(currentPos.lat - lat);
       const lngDiff = Math.abs(currentPos.lng - lng);
+
       if (latDiff > 0.0001 || lngDiff > 0.0001) {
         isProgrammaticMove.current = true;
         mapInstanceRef.current.setView([lat, lng], 16, { animate: false });
@@ -87,17 +89,16 @@ const Checkout = () => {
   const dispatch = useDispatch();
   const { items } = useSelector((state) => state.cart);
   const { isAuthenticated, token } = useSelector((state) => state.auth);
-  
+
   const [step, setStep] = useState(1);
-  
   const [savedAddresses, setSavedAddresses] = useState([]);
   const [selectedAddressId, setSelectedAddressId] = useState(null);
   const [isAddingNewAddress, setIsAddingNewAddress] = useState(false);
-  
   const [isFetchingLocation, setIsFetchingLocation] = useState(false);
   const [newAddress, setNewAddress] = useState({
     street: '', city: '', state: '', zip: '', lat: 6.5244, lng: 3.3792
   });
+
   const geocodeTimeoutRef = useRef(null);
 
   const [formData, setFormData] = useState({
@@ -108,7 +109,7 @@ const Checkout = () => {
     city: '',
     address: '',
     postalCode: '',
-    paymentMethod: 'card'
+    paymentMethod: 'stripe_ach' // Default changed since card is removed
   });
 
   useEffect(() => {
@@ -266,7 +267,6 @@ const Checkout = () => {
   const total = subtotal;
 
   const nextStep = () => {
-    // --- FIX: Strict form validation before proceeding to Step 2 ---
     if (step === 1) {
       if (!formData.fullName.trim()) return toast.error("Please provide your full name.");
       if (!formData.phone.trim()) return toast.error("Please provide your phone number.");
@@ -297,6 +297,7 @@ const Checkout = () => {
       navigate('/'); 
     } catch (error) {
       console.error("Checkout failed:", error);
+      toast.error("Checkout failed. Please try again.");
     }
   };
 
@@ -304,7 +305,6 @@ const Checkout = () => {
 
   const inputStyle = "w-full px-4 py-3.5 bg-blue-50/30 border border-blue-100 rounded-2xl outline-none focus:bg-white focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10 transition-all text-blue-950 font-semibold";
   const labelStyle = "block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1";
-
   const primaryBtn = "bg-blue-600 text-white py-4 rounded-full font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-600/20 hover:bg-blue-700 hover:shadow-xl hover:-translate-y-0.5 transition-all active:scale-95 flex items-center justify-center";
   const secondaryBtn = "bg-gray-100 text-gray-500 py-4 rounded-full font-black text-xs uppercase tracking-widest hover:bg-gray-200 transition-all active:scale-95 flex items-center justify-center";
   const successBtn = "bg-green-600 text-white py-4 rounded-full font-black text-xs uppercase tracking-widest shadow-lg shadow-green-600/20 hover:bg-green-700 hover:shadow-xl hover:-translate-y-0.5 transition-all active:scale-95 flex items-center justify-center";
@@ -394,6 +394,7 @@ const Checkout = () => {
                           </div>
                           <p className="text-[9px] font-bold text-orange-500 mt-2 ml-1">* GPS/Pin accuracy may vary. Please review and edit your street name if needed.</p>
                         </div>
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                           <div className="space-y-1">
                             <label className={labelStyle}>City</label>
@@ -447,13 +448,13 @@ const Checkout = () => {
                       </button>
                     </div>
                   )}
-
                 </motion.div>
               )}
 
               {step === 2 && (
                 <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} className="bg-white rounded-[2rem] p-8 shadow-xl shadow-blue-900/5 border border-blue-50">
                   <h2 className="text-2xl font-black text-blue-950 mb-6">Shipping Method</h2>
+                  
                   <div className="border-2 border-blue-600 bg-blue-50/50 rounded-2xl p-6 flex justify-between items-center mb-8 cursor-pointer transition-all hover:bg-blue-50">
                     <div className="flex items-center">
                       <div className="w-5 h-5 rounded-full border-4 border-blue-600 bg-white mr-4"></div>
@@ -479,11 +480,10 @@ const Checkout = () => {
                   <h2 className="text-2xl font-black text-blue-950 mb-2">Choose Payment Method</h2>
                   <p className="text-[10px] text-gray-400 mb-8 font-black uppercase tracking-widest">Secure templates for integration</p>
                   
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
                     {[
-                      { id: 'card', name: 'Credit Card', icon: <CreditCard size={20}/>, tag: 'Popular', sub: 'Stripe/Visa' },
-                      { id: 'paypal', name: 'PayPal', icon: <Globe size={20}/>, tag: '', sub: 'Fast Checkout' },
-                      { id: 'paystack', name: 'Paystack', icon: <Smartphone size={20}/>, tag: 'Africa', sub: 'Local Cards' }
+                      { id: 'stripe_ach', name: 'Stripe Bank Transfer', icon: <Globe size={20}/>, tag: 'Global', sub: 'Direct Bank Payment (No Cards)' },
+                      { id: 'paystack', name: 'Paystack', icon: <Smartphone size={20}/>, tag: 'Africa', sub: 'Details Coming Soon' }
                     ].map((m) => (
                       <div 
                         key={m.id} 
@@ -579,6 +579,7 @@ const Checkout = () => {
                   <span className="text-gray-500">Shipping Cost</span>
                   <span className="text-[10px] font-black tracking-widest text-green-600 bg-green-50 px-2 py-1 rounded-md uppercase">Free</span>
                 </div>
+                
                 <div className="flex justify-between pt-4 border-t border-blue-100 mt-2 items-end">
                   <span className="text-base font-black text-blue-950">Total Amount</span>
                   <span className="text-3xl font-black text-blue-600">${total.toFixed(2)}</span>
@@ -586,7 +587,6 @@ const Checkout = () => {
               </div>
             </div>
           </div>
-
         </div>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import os
+import stripe
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.auth.tokens import default_token_generator
@@ -31,6 +32,9 @@ from .serializers import (
     EventSerializer,
     OrderSerializer
 )
+
+# Initialize Stripe API Key (Make sure to add this to your core/settings.py)
+stripe.api_key = getattr(settings, 'STRIPE_TEST_SECRET_KEY', 'sk_test_placeholder')
 
 class IsAdminOrReadOnly(BasePermission):
     def has_permission(self, request, view):
@@ -134,8 +138,8 @@ class EventList(generics.ListCreateAPIView):
         expired_events = Event.objects.filter(is_active=True, end_date__lte=timezone.now())
         if expired_events.exists():
             expired_events.update(is_active=False)
-            Product.objects.update(discount_percentage=0) 
-            
+            Product.objects.update(discount_percentage=0)
+              
         return Event.objects.all().order_by('-id')
 
 class EventDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -236,7 +240,6 @@ class VerifyEmailView(APIView):
         if user and default_token_generator.check_token(user, token):
             user.is_active = True
             user.save()
-
             refresh = RefreshToken.for_user(user)
             return Response({
                 "tokens": {"refresh": str(refresh), "access": str(refresh.access_token)},
@@ -334,7 +337,6 @@ class ChangePasswordView(APIView):
 
         request.user.set_password(new_password)
         request.user.save()
-
         return Response({"message": "Password updated successfully."}, status=status.HTTP_200_OK)
 
 @api_view(['GET', 'POST'])
@@ -416,30 +418,7 @@ class CheckoutView(APIView):
         user = request.user
         shipping_address = request.data.get('shipping_address', '')
         total_price = request.data.get('total_price', 0.00)
-        
-        profile, _ = UserProfile.objects.get_or_create(user=user)
-        if 'phone' in request.data: 
-            profile.phone = request.data.get('phone', '')
-            profile.save()
-
-        # Forcefully update the DB row to bypass Django's auto_now_add restrictions
-        updated_count = Order.objects.filter(user=user, status='pending').update(
-            shipping_address=shipping_address,
-            total_price=total_price,
-            status='processing',
-            created_at=timezone.now()
-        )
-
-        if updated_count > 0:
-            return Response({"message": "Order placed successfully"}, status=status.HTTP_200_OK)
-        else:
-            return Response({"error": "No pending order found"}, status=status.HTTP_400_BAD_REQUEST)
-    permission_classes = [IsAuthenticated]
-    
-    def post(self, request):
-        user = request.user
-        shipping_address = request.data.get('shipping_address', '')
-        total_price = request.data.get('total_price', 0.00)
+        payment_method = request.data.get('payment_method', '') # get the selected method
         
         profile, _ = UserProfile.objects.get_or_create(user=user)
         if 'phone' in request.data: 
@@ -448,15 +427,33 @@ class CheckoutView(APIView):
 
         try:
             order = Order.objects.get(user=user, status='pending')
+            
+            # 1. Stripe Sandbox Integration (No Cards)
+            if payment_method == 'stripe_ach':
+                intent = stripe.PaymentIntent.create(
+                    amount=int(float(total_price) * 100), # Stripe expects amounts in cents
+                    currency='usd',
+                    payment_method_types=['us_bank_account'], # Explicitly omitting 'card'
+                    metadata={'order_id': order.id}
+                )
+
+            # 2. Paystack Integration Space
+            elif payment_method == 'paystack':
+                pass # TODO: Implement Paystack initialization logic here
+
+            # Update Order Status
             order.shipping_address = shipping_address
             order.total_price = total_price
             order.status = 'processing'
-            # --- FIX: Set the exact checkout time so revenue charts correctly map to today ---
             order.created_at = timezone.now()
             order.save()
+            
             return Response({"message": "Order placed successfully"}, status=status.HTTP_200_OK)
+            
         except Order.DoesNotExist:
             return Response({"error": "No pending order found"}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class WishlistAPIView(generics.ListCreateAPIView):
     serializer_class = WishlistItemSerializer
@@ -484,6 +481,7 @@ class WishlistDetailAPIView(generics.DestroyAPIView):
 
     def get_queryset(self):
         return WishlistItem.objects.filter(user=self.request.user)
+
 
 @api_view(['GET'])
 @permission_classes([AllowAny])

@@ -1,9 +1,12 @@
-import React from 'react'; // <--- ADD THIS
+import React from 'react';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Navigation, Pagination, Autoplay } from 'swiper/modules';
 import 'swiper/css';
 import 'swiper/css/navigation';
 import 'swiper/css/pagination';
+
+// Import your universal ProductCard
+import ProductCard from '../../features/products/ProductCard';
 
 const Carousel = ({ items }) => {
   return (
@@ -13,21 +16,16 @@ const Carousel = ({ items }) => {
       slidesPerView={1}
       navigation
       pagination={{ clickable: true }}
-      autoplay={{ delay: 5000 }}
+      autoplay={{ delay: 5000, disableOnInteraction: true }}
       breakpoints={{
         640: { slidesPerView: 2 },
         1024: { slidesPerView: 4 },
       }}
-      className="product-carousel"
+      className="product-carousel !pb-14" // Added padding-bottom so pagination dots don't overlap cards
     >
       {items.map((item) => (
-        <SwiperSlide key={item.id}>
-          {/* Your ProductCard component would go here */}
-          <div className="p-4 bg-white border border-blue-100 rounded-xl shadow-sm">
-            <img src={item.image} alt={item.name} className="rounded-lg mb-4" />
-            <h3 className="text-xl font-bold">{item.name}</h3>
-            <p className="text-blue-600 font-bold">${item.price}</p>
-          </div>
+        <SwiperSlide key={item.id} className="h-auto pb-4">
+          <ProductCard product={item} />
         </SwiperSlide>
       ))}
     </Swiper>
