@@ -22,15 +22,22 @@ from rest_framework.exceptions import ValidationError
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 
-from .models import Product, Category, Review, Order, OrderItem, UserProfile, UserAddress, WishlistItem, Event, WebsiteVisit
+from .models import (
+    Product, Category, Review, Order, OrderItem,
+    UserProfile, UserAddress, WishlistItem, Event, WebsiteVisit,
+    LiveStreamBroadcast, LiveStreamComment
+)
 from .serializers import (
-    ProductSerializer, 
-    CategorySerializer, 
-    ReviewSerializer, 
+    ProductSerializer,
+    CategorySerializer,
+    ReviewSerializer,
     RegisterSerializer,
     WishlistItemSerializer,
     EventSerializer,
-    OrderSerializer
+    OrderSerializer,
+    LiveStreamBroadcastSerializer,
+    LiveStreamAdminSerializer,
+    LiveStreamCommentSerializer,
 )
 
 # Initialize Stripe API Key (Make sure to add this to your core/settings.py)
@@ -486,11 +493,250 @@ class WishlistDetailAPIView(generics.DestroyAPIView):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def livestream_status(request):
+    """
+    Public endpoint polled by the frontend every 5 minutes via useYouTube.js.
+    Returns the current live broadcast state from the database.
+    """
+    broadcast = LiveStreamBroadcast.objects.filter(is_live=True).first()
+    if broadcast:
+        return Response({
+            "isLive": True,
+            "videoId": broadcast.video_id,
+            "title": broadcast.title,
+            "description": broadcast.description,
+            "broadcastId": broadcast.id,
+            "viewerCount": broadcast.viewer_count,
+            "event": {
+                "id": broadcast.event.id,
+                "name": broadcast.event.name,
+            } if broadcast.event else None,
+        }, status=200)
     return Response({
         "isLive": False,
         "videoId": None,
-        "title": "No active stream"
+        "title": "No active stream",
+        "description": "",
+        "broadcastId": None,
+        "viewerCount": 0,
+        "event": None,
     }, status=200)
+
+
+# ─── LIVESTREAM ADMIN VIEWS ──────────────────────────────────────────────────
+
+class LiveStreamBroadcastListView(generics.ListCreateAPIView):
+    """
+    GET  /api/livestream/broadcasts/       — list all broadcasts (admin)
+    POST /api/livestream/broadcasts/       — create new broadcast (admin)
+    """
+    queryset = LiveStreamBroadcast.objects.all()
+    serializer_class = LiveStreamAdminSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAuthenticated()]
+        return [IsAuthenticated()]
+
+    def perform_create(self, serializer):
+        serializer.save()
+
+
+class LiveStreamBroadcastDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    GET    /api/livestream/broadcasts/<id>/  — get broadcast details
+    PATCH  /api/livestream/broadcasts/<id>/  — update (toggle is_live, etc.)
+    DELETE /api/livestream/broadcasts/<id>/  — delete broadcast
+    """
+    queryset = LiveStreamBroadcast.objects.all()
+    serializer_class = LiveStreamAdminSerializer
+    permission_classes = [IsAuthenticated]
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def toggle_live(request, pk):
+    """
+    POST /api/livestream/broadcasts/<id>/toggle/
+    Body: { "is_live": true/false }
+    Convenience endpoint for the admin dashboard's go-live button.
+    """
+    if not request.user.is_staff:
+        return Response({"detail": "Admin access required."}, status=403)
+    try:
+        broadcast = LiveStreamBroadcast.objects.get(pk=pk)
+    except LiveStreamBroadcast.DoesNotExist:
+        return Response({"detail": "Broadcast not found."}, status=404)
+
+    go_live = request.data.get('is_live', not broadcast.is_live)
+    broadcast.is_live = go_live
+    broadcast.save()
+
+    serializer = LiveStreamAdminSerializer(broadcast)
+    return Response({
+        "message": f"Stream is now {'LIVE 🔴' if go_live else 'OFFLINE ⚫'}",
+        "broadcast": serializer.data
+    })
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def update_viewer_count(request, pk):
+    """PATCH /api/livestream/broadcasts/<id>/viewers/ — update viewer count from admin."""
+    if not request.user.is_staff:
+        return Response({"detail": "Admin access required."}, status=403)
+    try:
+        broadcast = LiveStreamBroadcast.objects.get(pk=pk)
+    except LiveStreamBroadcast.DoesNotExist:
+        return Response({"detail": "Not found."}, status=404)
+    count = request.data.get('viewer_count', broadcast.viewer_count)
+    broadcast.viewer_count = count
+    broadcast.save(update_fields=['viewer_count'])
+    return Response({"viewer_count": broadcast.viewer_count})
+
+
+# ─── COMMENT VIEWS ──────────────────────────────────────────────────────────
+
+class LiveStreamCommentListView(generics.ListCreateAPIView):
+    """
+    GET  /api/livestream/broadcasts/<id>/comments/  — get visible comments (public)
+    POST /api/livestream/broadcasts/<id>/comments/  — post a comment (auth or guest with name)
+    """
+    serializer_class = LiveStreamCommentSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        broadcast_id = self.kwargs['pk']
+        return LiveStreamComment.objects.filter(
+            broadcast_id=broadcast_id,
+            is_hidden=False
+        ).select_related('user').order_by('-is_pinned', '-created_at')
+
+    def perform_create(self, serializer):
+        broadcast_id = self.kwargs['pk']
+        try:
+            broadcast = LiveStreamBroadcast.objects.get(pk=broadcast_id)
+        except LiveStreamBroadcast.DoesNotExist:
+            raise ValidationError({"broadcast": "Broadcast not found."})
+        user = self.request.user if self.request.user.is_authenticated else None
+        serializer.save(broadcast=broadcast, user=user, source='site')
+
+
+class LiveStreamCommentAdminView(generics.ListAPIView):
+    """
+    GET /api/livestream/comments/        — all comments including hidden (admin)
+    Supports ?broadcast=<id> filter.
+    """
+    serializer_class = LiveStreamCommentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = LiveStreamComment.objects.all().select_related('user', 'broadcast')
+        broadcast_id = self.request.query_params.get('broadcast')
+        if broadcast_id:
+            qs = qs.filter(broadcast_id=broadcast_id)
+        return qs
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def moderate_comment(request, comment_id):
+    """
+    PATCH /api/livestream/comments/<id>/moderate/
+    Body: { "is_hidden": true, "is_pinned": false, "is_highlighted": true }
+    Admin moderation endpoint.
+    """
+    if not request.user.is_staff:
+        return Response({"detail": "Admin access required."}, status=403)
+    try:
+        comment = LiveStreamComment.objects.get(pk=comment_id)
+    except LiveStreamComment.DoesNotExist:
+        return Response({"detail": "Comment not found."}, status=404)
+
+    allowed_fields = ['is_hidden', 'is_pinned', 'is_highlighted']
+    for field in allowed_fields:
+        if field in request.data:
+            setattr(comment, field, request.data[field])
+    comment.save()
+    return Response(LiveStreamCommentSerializer(comment).data)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_comment(request, comment_id):
+    """DELETE /api/livestream/comments/<id>/delete/ — permanently delete a comment (admin)."""
+    if not request.user.is_staff:
+        return Response({"detail": "Admin access required."}, status=403)
+    try:
+        comment = LiveStreamComment.objects.get(pk=comment_id)
+        comment.delete()
+        return Response({"detail": "Comment deleted."}, status=204)
+    except LiveStreamComment.DoesNotExist:
+        return Response({"detail": "Not found."}, status=404)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def sync_youtube_comments(request, pk):
+    """
+    POST /api/livestream/broadcasts/<id>/sync-youtube/
+    Pulls comments from the YouTube Data API v3 for the broadcast's video_id
+    and saves them as LiveStreamComment objects with source='youtube'.
+    Requires YOUTUBE_API_KEY in settings.py (or .env).
+    """
+    if not request.user.is_staff:
+        return Response({"detail": "Admin access required."}, status=403)
+
+    try:
+        broadcast = LiveStreamBroadcast.objects.get(pk=pk)
+    except LiveStreamBroadcast.DoesNotExist:
+        return Response({"detail": "Broadcast not found."}, status=404)
+
+    if not broadcast.video_id:
+        return Response({"detail": "This broadcast has no YouTube video ID set."}, status=400)
+
+    api_key = getattr(settings, 'YOUTUBE_API_KEY', None)
+    if not api_key:
+        return Response({
+            "detail": "YOUTUBE_API_KEY is not configured in settings. Add it to your .env file."
+        }, status=503)
+
+    import urllib.request
+    import json as json_lib
+
+    url = (
+        f"https://www.googleapis.com/youtube/v3/commentThreads"
+        f"?part=snippet&videoId={broadcast.video_id}"
+        f"&maxResults=100&order=time&key={api_key}"
+    )
+
+    try:
+        with urllib.request.urlopen(url, timeout=10) as resp:
+            data = json_lib.loads(resp.read().decode())
+    except Exception as e:
+        return Response({"detail": f"YouTube API error: {str(e)}"}, status=502)
+
+    imported = 0
+    for item in data.get('items', []):
+        snippet = item['snippet']['topLevelComment']['snippet']
+        yt_id = item['snippet']['topLevelComment']['id']
+        # Skip if already imported
+        if LiveStreamComment.objects.filter(youtube_comment_id=yt_id).exists():
+            continue
+        LiveStreamComment.objects.create(
+            broadcast=broadcast,
+            display_name=snippet.get('authorDisplayName', 'YouTube User'),
+            message=snippet.get('textDisplay', ''),
+            source='youtube',
+            youtube_comment_id=yt_id,
+        )
+        imported += 1
+
+    return Response({
+        "message": f"Synced {imported} new YouTube comment(s).",
+        "total_in_response": len(data.get('items', [])),
+        "new_imported": imported,
+    })
 
 @api_view(['POST'])
 @permission_classes([AllowAny])

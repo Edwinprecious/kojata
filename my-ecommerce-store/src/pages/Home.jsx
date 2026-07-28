@@ -1,403 +1,663 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { 
-  Package, UserCheck, ArrowRight, LayoutGrid, Zap, 
-  Flame, ShieldCheck, Truck, Headphones, RefreshCcw 
+import { motion, useInView, AnimatePresence } from 'framer-motion';
+import {
+  ArrowRight, Zap, Flame, ShieldCheck, Truck,
+  Headphones, RefreshCcw, Radio, Users, Star,
+  Package, ChevronRight, TrendingUp, Eye, Award,
+  Sparkles, LayoutGrid, Timer
 } from 'lucide-react';
 
-// Component Imports
 import LiveShowSection from '../features/livestream/LiveShowSection';
 import Testimonials from '../features/products/Testimonials';
-import Hero from '../components/home/Hero';
 import ProductCard from '../features/products/ProductCard';
-import Carousel from '../components/common/Carousel'; // Imported Carousel component
+import Carousel from '../components/common/Carousel';
 import api from '../services/api';
+import { getLiveStatus } from '../services/youtubeApi';
 
+// ─── Animated Counter ─────────────────────────────────────────────────────────
+const AnimatedCounter = ({ end, suffix = '', duration = 2000 }) => {
+  const [count, setCount] = useState(0);
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: true });
+
+  useEffect(() => {
+    if (!inView) return;
+    const numeric = parseFloat(end.replace(/[^0-9.]/g, ''));
+    const steps = 60;
+    const increment = numeric / steps;
+    let current = 0;
+    const timer = setInterval(() => {
+      current += increment;
+      if (current >= numeric) { setCount(numeric); clearInterval(timer); }
+      else setCount(current);
+    }, duration / steps);
+    return () => clearInterval(timer);
+  }, [inView, end, duration]);
+
+  const display = parseFloat(end) >= 1000
+    ? (count >= 1000 ? `${(count / 1000).toFixed(count >= 10000 ? 0 : 1)}K` : Math.round(count).toString())
+    : count >= 10 ? Math.round(count).toString()
+    : count.toFixed(1);
+
+  return <span ref={ref}>{display}{suffix}</span>;
+};
+
+// ─── Section Wrapper with scroll reveal ──────────────────────────────────────
+const RevealSection = ({ children, className = '', delay = 0 }) => {
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: true, margin: '-80px' });
+  return (
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, y: 32 }}
+      animate={inView ? { opacity: 1, y: 0 } : {}}
+      transition={{ duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] }}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
+};
+
+// ─── Skeleton Loader ─────────────────────────────────────────────────────────
+const SkeletonCard = () => (
+  <div className="bg-white rounded-3xl p-6 border border-gray-100 animate-pulse">
+    <div className="w-full aspect-square bg-gray-100 rounded-2xl mb-4" />
+    <div className="h-3 bg-gray-100 rounded-full mb-2 w-3/4" />
+    <div className="h-3 bg-gray-100 rounded-full w-1/2" />
+    <div className="h-8 bg-gray-100 rounded-full mt-4 w-full" />
+  </div>
+);
+
+
+// ═════════════════════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═════════════════════════════════════════════════════════════════════════════
 const Home = () => {
-  const [activeCategories, setActiveCategories] = useState([]);
-  const [displayCategories, setDisplayCategories] = useState([]);
   const [newArrivals, setNewArrivals] = useState([]);
   const [hotSales, setHotSales] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  // --- Timer & Event States ---
+  const [displayCategories, setDisplayCategories] = useState([]);
+  const [activeCategories, setActiveCategories] = useState([]);
   const [activeEvent, setActiveEvent] = useState(null);
+  const [liveStatus, setLiveStatus] = useState({ isLive: false });
+  const [isLoading, setIsLoading] = useState(true);
   const [timeLeft, setTimeLeft] = useState({ days: '0', hours: '00', minutes: '00', seconds: '00' });
+  const [activeCatIndex, setActiveCatIndex] = useState(0);
 
-  // 1. Fetch store data and distribute it to the new sections
+  // ── Data Fetch ──────────────────────────────────────────────────────────────
   useEffect(() => {
-    const fetchStoreData = async () => {
+    const fetchAll = async () => {
       try {
-        const [prodRes, eventRes] = await Promise.allSettled([
+        const [prodRes, eventRes, liveRes] = await Promise.allSettled([
           api.get('/products/'),
-          api.get('/events/active/')
+          api.get('/events/active/'),
+          getLiveStatus(),
         ]);
 
         if (prodRes.status === 'fulfilled') {
-          const products = Array.isArray(prodRes.value.data) ? prodRes.value.data : (prodRes.value.data?.results || []);
-          
-          // New Arrivals: Default backend sorting is by -id (newest first)
+          const products = Array.isArray(prodRes.value.data)
+            ? prodRes.value.data
+            : (prodRes.value.data?.results || []);
+
           setNewArrivals(products.slice(0, 4));
+          const byPopularity = [...products].sort((a, b) => (b.sales_count || 0) - (a.sales_count || 0));
+          setHotSales(byPopularity.slice(0, 8));
 
-          // Hot Sales: Sort by actual sales_count from the backend
-          const sortedBySales = [...products].sort((a, b) => parseInt(b.sales_count || 0) - parseInt(a.sales_count || 0));
-          
-          // Set to 8 items to populate the carousel effectively
-          setHotSales(sortedBySales.slice(0, 8));
-
-          // Categories processing
           const catMap = {};
           products.forEach(p => {
-            const catName = p.category_name || (typeof p.category === 'object' ? p.category.name : '');
-            if (catName) {
-              const slug = catName.toLowerCase().replace('&', 'and').replace(/\s+/g, ' ').trim();
-              if (!catMap[slug]) {
-                catMap[slug] = { name: catName, slug: slug, count: 0, image: p.image || null };
-              }
-              catMap[slug].count += 1;
-              if (!catMap[slug].image && p.image) catMap[slug].image = p.image;
-            }
+            const name = p.category_name || (typeof p.category === 'object' ? p.category?.name : '');
+            if (!name) return;
+            const slug = name.toLowerCase().replace('&', 'and').replace(/\s+/g, ' ').trim();
+            if (!catMap[slug]) catMap[slug] = { name, slug, count: 0, image: null };
+            catMap[slug].count++;
+            if (!catMap[slug].image && p.image) catMap[slug].image = p.image;
           });
-          
-          const categoryArray = Object.values(catMap);
-          setActiveCategories(categoryArray);
-          setDisplayCategories(categoryArray.slice(0, 9));
+          const cats = Object.values(catMap);
+          setActiveCategories(cats);
+          setDisplayCategories(cats.slice(0, 9));
         }
 
         if (eventRes.status === 'fulfilled' && eventRes.value.data) {
           setActiveEvent(eventRes.value.data);
         }
 
-      } catch (error) {
-        console.error("Failed to fetch store data:", error);
+        if (liveRes.status === 'fulfilled') {
+          setLiveStatus(liveRes.value);
+        }
+      } catch (e) {
+        console.error('Home fetch error:', e);
       } finally {
         setIsLoading(false);
       }
     };
-
-    fetchStoreData();
+    fetchAll();
   }, []);
 
-  // 2. The Auto-Swapping Logic for Categories
+  // ── Category auto-swap ──────────────────────────────────────────────────────
   useEffect(() => {
     if (displayCategories.length <= 1) return;
-
-    const swapInterval = setInterval(() => {
+    const id = setInterval(() => {
       setDisplayCategories(prev => {
-        const newArray = [...prev];
-        const idx1 = Math.floor(Math.random() * newArray.length);
-        let idx2 = Math.floor(Math.random() * newArray.length);
-        
-        while (idx1 === idx2) idx2 = Math.floor(Math.random() * newArray.length);
-
-        [newArray[idx1], newArray[idx2]] = [newArray[idx2], newArray[idx1]];
-        return newArray;
+        const arr = [...prev];
+        const i = Math.floor(Math.random() * arr.length);
+        let j = Math.floor(Math.random() * arr.length);
+        while (i === j) j = Math.floor(Math.random() * arr.length);
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+        return arr;
       });
     }, 4000);
-
-    return () => clearInterval(swapInterval);
+    return () => clearInterval(id);
   }, [displayCategories.length]);
 
-  // 3. The Live Countdown Timer Logic
+  // ── Countdown ───────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!activeEvent || !activeEvent.end_date) return;
-
-    const timer = setInterval(() => {
-      const now = new Date().getTime();
-      const endDate = new Date(activeEvent.end_date).getTime();
-      const difference = endDate - now;
-
-      if (difference <= 0) {
-        clearInterval(timer);
-        setTimeLeft({ days: '0', hours: '00', minutes: '00', seconds: '00' });
-        setActiveEvent(null); 
-      } else {
-        const days = Math.floor(difference / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((difference % (1000 * 60)) / 1000);
-
-        setTimeLeft({
-          days: days.toString(),
-          hours: hours.toString().padStart(2, '0'),
-          minutes: minutes.toString().padStart(2, '0'),
-          seconds: seconds.toString().padStart(2, '0')
-        });
-      }
-    }, 1000);
-
-    return () => clearInterval(timer);
+    if (!activeEvent?.end_date) return;
+    const tick = () => {
+      const diff = new Date(activeEvent.end_date).getTime() - Date.now();
+      if (diff <= 0) { setActiveEvent(null); return; }
+      setTimeLeft({
+        days: Math.floor(diff / 86400000).toString(),
+        hours: Math.floor((diff % 86400000) / 3600000).toString().padStart(2, '0'),
+        minutes: Math.floor((diff % 3600000) / 60000).toString().padStart(2, '0'),
+        seconds: Math.floor((diff % 60000) / 1000).toString().padStart(2, '0'),
+      });
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
   }, [activeEvent]);
 
-  return (
-    <main className="pt-16 md:pt-20 space-y-12 md:space-y-20 overflow-x-hidden font-sans">
-      
-      {/* 1. HERO SECTION */}
-      <Hero />
+  // ── Category tab filter ─────────────────────────────────────────────────────
+  const visibleCats = activeCategories.slice(0, 6);
 
-      {/* 2. TRUST BADGES (Professional E-commerce staple) */}
-      <section className="max-w-7xl mx-auto px-4 md:px-6 -mt-8 md:-mt-12 relative z-20">
-        <div className="bg-white rounded-3xl shadow-xl shadow-blue-900/5 border border-gray-100 p-6 md:p-8 grid grid-cols-2 md:grid-cols-4 gap-6">
-          <div className="flex flex-col items-center text-center space-y-2">
-            <div className="bg-blue-50 text-blue-600 p-3 rounded-full"><Truck size={24} /></div>
-            <h4 className="text-blue-950 font-black text-sm">Express Delivery</h4>
-            <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest hidden sm:block">Worldwide Shipping</p>
-          </div>
-          <div className="flex flex-col items-center text-center space-y-2">
-            <div className="bg-green-50 text-green-600 p-3 rounded-full"><ShieldCheck size={24} /></div>
-            <h4 className="text-blue-950 font-black text-sm">Secure Payment</h4>
-            <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest hidden sm:block">256-bit Encryption</p>
-          </div>
-          <div className="flex flex-col items-center text-center space-y-2">
-            <div className="bg-orange-50 text-orange-600 p-3 rounded-full"><RefreshCcw size={24} /></div>
-            <h4 className="text-blue-950 font-black text-sm">Free Returns</h4>
-            <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest hidden sm:block">30-Day Guarantee</p>
-          </div>
-          <div className="flex flex-col items-center text-center space-y-2">
-            <div className="bg-purple-50 text-purple-600 p-3 rounded-full"><Headphones size={24} /></div>
-            <h4 className="text-blue-950 font-black text-sm">24/7 Support</h4>
-            <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest hidden sm:block">Dedicated Concierge</p>
+  return (
+    <main className="overflow-x-hidden font-sans bg-white">
+
+      {/* ═══ 1. HERO ══════════════════════════════════════════════════════════ */}
+      <section className="relative min-h-screen flex items-center bg-[#f8f9ff] overflow-hidden">
+        {/* Mesh background */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-0 right-0 w-[60vw] h-[60vw] bg-blue-100/60 rounded-full blur-[120px] -translate-y-1/4 translate-x-1/4" />
+          <div className="absolute bottom-0 left-0 w-[40vw] h-[40vw] bg-indigo-100/50 rounded-full blur-[100px] translate-y-1/4 -translate-x-1/4" />
+          {/* Subtle grid */}
+          <div
+            className="absolute inset-0 opacity-[0.03]"
+            style={{ backgroundImage: 'linear-gradient(#1e3a8a 1px, transparent 1px), linear-gradient(90deg, #1e3a8a 1px, transparent 1px)', backgroundSize: '60px 60px' }}
+          />
+        </div>
+
+        <div className="relative z-10 max-w-7xl mx-auto px-6 pt-32 pb-24 w-full grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+
+          {/* Left */}
+          <motion.div initial={{ opacity: 0, x: -40 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}>
+            {/* Live badge */}
+            <AnimatePresence>
+              {liveStatus.isLive && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="inline-flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded-full text-[11px] font-black uppercase tracking-widest mb-6"
+                >
+                  <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                  We're Live Now — Join the Show
+                  <Link to="/live" className="text-red-700 hover:underline ml-1">→</Link>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {!liveStatus.isLive && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className="inline-flex items-center gap-2 bg-blue-50 text-blue-600 px-4 py-2 rounded-full text-[11px] font-black uppercase tracking-[0.18em] mb-6"
+              >
+                <Zap size={13} /> Limited Time Deals
+              </motion.div>
+            )}
+
+            <h1 className="text-[clamp(3rem,8vw,6.5rem)] font-black text-blue-950 leading-[0.88] tracking-[-0.03em] mb-8">
+              The Future<br />
+              of Shopping<br />
+              <span className="text-blue-600 italic">Is Live.</span>
+            </h1>
+
+            <p className="text-gray-500 text-base md:text-lg leading-relaxed mb-10 max-w-md">
+              Exclusive flash deals, live product demos, and prices that only exist during the broadcast. Don't shop. Watch. Shop.
+            </p>
+
+            <div className="flex flex-wrap gap-4">
+              <Link
+                to="/deals"
+                className="flex items-center gap-3 bg-blue-600 text-white px-7 py-4 rounded-2xl font-bold text-base shadow-xl shadow-blue-600/25 hover:bg-blue-700 hover:-translate-y-0.5 transition-all group"
+              >
+                Shop Flash Deals
+                <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+              </Link>
+              <Link
+                to="/live"
+                className="flex items-center gap-3 bg-white border-2 border-gray-200 text-blue-950 px-7 py-4 rounded-2xl font-bold text-base hover:border-red-300 hover:text-red-600 hover:-translate-y-0.5 transition-all"
+              >
+                <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse shrink-0" />
+                Watch Live
+              </Link>
+              <Link
+                to="/category/all"
+                className="flex items-center gap-3 text-blue-950 px-7 py-4 rounded-2xl font-bold text-base border-2 border-gray-100 hover:border-blue-200 hover:-translate-y-0.5 transition-all"
+              >
+                <LayoutGrid size={18} /> Browse All
+              </Link>
+            </div>
+
+            {/* Social proof pills */}
+            <div className="flex items-center gap-6 mt-10">
+              <div className="flex -space-x-2">
+                {['#1e40af','#1d4ed8','#3b82f6','#60a5fa'].map((bg, i) => (
+                  <div key={i} className="w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-white text-[9px] font-bold" style={{ backgroundColor: bg }}>
+                    {['R','M','S','T'][i]}
+                  </div>
+                ))}
+              </div>
+              <div>
+                <div className="flex items-center gap-1 text-yellow-400">
+                  {[...Array(5)].map((_, i) => <Star key={i} size={12} fill="currentColor" />)}
+                </div>
+                <p className="text-[11px] text-gray-400 font-bold mt-0.5">2.4M+ happy customers</p>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Right — product visual */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.85 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.9, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
+            className="hidden lg:block relative"
+          >
+            <div className="relative">
+              {/* Glow ring */}
+              <div className="absolute inset-4 bg-blue-200/40 rounded-[60px] blur-3xl" />
+              <img
+                src="https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=900&auto=format&fit=crop"
+                alt="Featured Product"
+                className="relative w-full rounded-[48px] shadow-2xl shadow-blue-900/15 object-cover aspect-square"
+              />
+
+              {/* Floating cards */}
+              <motion.div
+                animate={{ y: [0, -8, 0] }}
+                transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                className="absolute -bottom-4 -left-8 bg-white rounded-3xl shadow-2xl shadow-blue-900/10 p-5 border border-gray-100"
+              >
+                <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">New Arrival</p>
+                <p className="text-base font-black text-blue-950 mt-0.5">Aura Watch S2</p>
+                <p className="text-xl font-black text-blue-600 mt-1">$185.00</p>
+              </motion.div>
+
+              <motion.div
+                animate={{ y: [0, 8, 0] }}
+                transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+                className="absolute top-8 -right-6 bg-white rounded-3xl shadow-2xl shadow-blue-900/10 p-4 border border-gray-100 flex items-center gap-3"
+              >
+                <div className="w-10 h-10 bg-orange-50 rounded-2xl flex items-center justify-center">
+                  <Flame size={18} className="text-orange-500" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-gray-400 uppercase">Trending</p>
+                  <p className="text-xs font-black text-blue-950">847 orders today</p>
+                </div>
+              </motion.div>
+
+              {liveStatus.isLive && (
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className="absolute top-6 left-6 bg-red-600 text-white px-4 py-2 rounded-full text-[11px] font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-red-600/30"
+                >
+                  <span className="w-2 h-2 bg-white rounded-full animate-pulse" /> Live Now
+                </motion.div>
+              )}
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Scroll indicator */}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 opacity-30">
+          <div className="w-px h-12 bg-blue-900 rounded-full overflow-hidden">
+            <motion.div animate={{ y: ['-100%', '200%'] }} transition={{ duration: 1.5, repeat: Infinity }} className="w-full h-1/2 bg-blue-600 rounded-full" />
           </div>
         </div>
       </section>
 
-      {/* 3. DYNAMIC FLASH EVENT BANNER */}
-      {activeEvent && (
-        <div className="max-w-7xl mx-auto px-4 md:px-6">
-          <div className="bg-blue-950 text-white rounded-[2.5rem] p-8 md:p-12 flex flex-col md:flex-row items-center justify-between shadow-2xl shadow-blue-900/20 overflow-hidden relative border border-blue-800">
-            <div className="absolute top-0 right-0 w-80 h-80 bg-red-500/20 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/3 pointer-events-none"></div>
-            <div className="absolute bottom-0 left-0 w-80 h-80 bg-blue-500/30 rounded-full blur-[80px] translate-y-1/2 -translate-x-1/3 pointer-events-none"></div>
-            
-            <div className="relative z-10 text-center md:text-left mb-8 md:mb-0 space-y-4">
-              <div className="inline-block px-4 py-1.5 bg-red-500/20 border border-red-500/30 text-red-400 text-xs font-black uppercase tracking-widest rounded-xl">
-                {activeEvent.name || "Flash Event"}
-              </div>
-              <h2 className="text-4xl md:text-5xl font-black tracking-tight leading-tight">
-                Sale.<br/>
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-pink-500">
-                  {activeEvent.description || "Up to 60% Off."}
-                </span>
-              </h2>
-              
-              <div className="flex items-center justify-center md:justify-start gap-4 mt-2">
-                <span className="text-blue-300 font-bold text-sm uppercase tracking-widest">Ends in</span>
-                <div className="flex gap-2 text-xl font-black tabular-nums items-center">
-                  {timeLeft.days !== '0' && (
-                    <>
-                      <span className="bg-white/10 px-3 py-2 rounded-xl border border-white/10 backdrop-blur-md shadow-inner">{timeLeft.days}d</span>
-                      <span className="text-blue-500/50 py-2">:</span>
-                    </>
-                  )}
-                  <span className="bg-white/10 px-3 py-2 rounded-xl border border-white/10 backdrop-blur-md shadow-inner">{timeLeft.hours}</span>
-                  <span className="text-blue-500/50 py-2">:</span>
-                  <span className="bg-white/10 px-3 py-2 rounded-xl border border-white/10 backdrop-blur-md shadow-inner">{timeLeft.minutes}</span>
-                  <span className="text-blue-500/50 py-2">:</span>
-                  <span className="bg-white/10 px-3 py-2 rounded-xl border border-white/10 backdrop-blur-md shadow-inner">{timeLeft.seconds}</span>
+      {/* ═══ 2. TRUST STRIP ═══════════════════════════════════════════════════ */}
+      <RevealSection className="max-w-7xl mx-auto px-6 -mt-6 relative z-20">
+        <div className="bg-white rounded-[2rem] shadow-xl shadow-blue-900/5 border border-gray-100">
+          <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-y md:divide-y-0 divide-gray-100">
+            {[
+              { icon: <Truck size={22} />, color: 'blue', label: 'Express Delivery', sub: 'Worldwide Shipping' },
+              { icon: <ShieldCheck size={22} />, color: 'green', label: 'Secure Payment', sub: '256-bit Encryption' },
+              { icon: <RefreshCcw size={22} />, color: 'orange', label: 'Free Returns', sub: '30-Day Guarantee' },
+              { icon: <Headphones size={22} />, color: 'purple', label: '24/7 Support', sub: 'Dedicated Concierge' },
+            ].map(({ icon, color, label, sub }) => (
+              <div key={label} className="flex flex-col sm:flex-row items-center sm:items-start gap-3 p-6 md:p-8 text-center sm:text-left">
+                <div className={`p-3 rounded-2xl shrink-0 bg-${color}-50 text-${color}-600`}>{icon}</div>
+                <div>
+                  <p className="font-black text-blue-950 text-sm">{label}</p>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5 hidden sm:block">{sub}</p>
                 </div>
               </div>
-            </div>
-
-            <div className="relative z-10 shrink-0">
-              <Link 
-                to="/deals" 
-                className="bg-white text-blue-950 px-8 py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-white/10 hover:scale-105 hover:bg-gray-50 transition-all flex items-center gap-2 group"
-              >
-                Explore Deals 
-                <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-              </Link>
-            </div>
+            ))}
           </div>
         </div>
-      )}
+      </RevealSection>
 
-      {/* 7. LIVE SHOW PROMO & FEED */}
-      <div className="bg-gray-50 py-20 mt-20 border-t border-gray-100">
-        <LiveShowSection />
-        
-        <section className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-3 gap-10 mt-16">
-          <div className="lg:col-span-1 space-y-6">
-            <p className="text-blue-600 font-bold text-xs md:text-sm uppercase tracking-widest">Live Activity</p>
-            <h2 className="text-3xl md:text-4xl font-bold text-blue-900 leading-tight">What's happening right now</h2>
-            
-            <div className="bg-white p-6 rounded-3xl border border-gray-100 space-y-6 shadow-sm">
-              <div className="flex items-center space-x-4">
-                <div className="p-4 bg-blue-50 rounded-2xl"><Package className="text-blue-600" size={28}/></div>
-                <div><p className="text-2xl font-black text-blue-950">1,247</p><p className="text-xs text-gray-400 font-bold uppercase tracking-tighter">Orders today</p></div>
-              </div>
-              <div className="flex items-center space-x-4">
-                <div className="p-4 bg-blue-50 rounded-2xl"><UserCheck className="text-blue-600" size={28}/></div>
-                <div><p className="text-2xl font-black text-blue-950">847</p><p className="text-xs text-gray-400 font-bold uppercase tracking-tighter">Live shoppers</p></div>
-              </div>
-            </div>
-          </div>
-          
-          <div className="lg:col-span-2 space-y-4">
-            <div className="flex justify-between items-center px-2">
-              <p className="flex items-center font-bold text-xs tracking-widest text-gray-500">
-                <span className="w-2 h-2 bg-red-500 rounded-full mr-2 animate-pulse"></span> LIVE FEED
-              </p>
-              <p className="text-[10px] text-gray-400 font-bold uppercase">Updates every few seconds</p>
-            </div>
-            
-            <div className="space-y-3">
-               <div className="bg-white p-5 rounded-2xl border border-gray-100 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 bg-blue-900 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg shadow-blue-900/20">T</div>
-                    <div>
-                      <p className="text-sm text-gray-800">
-                        <strong className="text-blue-900">Tom H.</strong> purchased <span className="text-gray-500 italic">CuisineArt Precision Blender</span>
-                      </p>
-                      <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest mt-1">San Diego, CA</p>
+      {/* ═══ 3. FLASH EVENT BANNER ════════════════════════════════════════════ */}
+      <AnimatePresence>
+        {activeEvent && (
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            className="max-w-7xl mx-auto px-6 mt-8"
+          >
+            <div className="relative overflow-hidden bg-blue-950 text-white rounded-[2.5rem] p-8 md:p-12 border border-blue-800 shadow-2xl shadow-blue-900/20">
+              {/* Ambient blobs */}
+              <div className="absolute top-0 right-0 w-96 h-96 bg-red-500/15 rounded-full blur-[100px] pointer-events-none" />
+              <div className="absolute bottom-0 left-0 w-72 h-72 bg-blue-500/20 rounded-full blur-[80px] pointer-events-none" />
+
+              <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+                <div>
+                  <div className="inline-flex items-center gap-2 bg-red-500/15 border border-red-500/25 text-red-400 text-[11px] font-black uppercase tracking-widest px-3 py-1.5 rounded-xl mb-4">
+                    <Timer size={12} /> {activeEvent.name || 'Flash Event'}
+                  </div>
+                  <h2 className="text-4xl md:text-5xl font-black tracking-tight leading-tight mb-4">
+                    {activeEvent.description || 'Up to 60% off.'}<br />
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-pink-400">Only while live.</span>
+                  </h2>
+
+                  {/* Countdown */}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className="text-blue-300 text-xs font-black uppercase tracking-widest">Ends in</span>
+                    <div className="flex items-center gap-1.5 text-lg font-black tabular-nums">
+                      {timeLeft.days !== '0' && (
+                        <>
+                          <span className="bg-white/10 backdrop-blur px-3 py-1.5 rounded-xl border border-white/10">{timeLeft.days}<span className="text-blue-400 text-xs ml-0.5">d</span></span>
+                          <span className="text-blue-500/50">:</span>
+                        </>
+                      )}
+                      <span className="bg-white/10 backdrop-blur px-3 py-1.5 rounded-xl border border-white/10">{timeLeft.hours}</span>
+                      <span className="text-blue-500/50">:</span>
+                      <span className="bg-white/10 backdrop-blur px-3 py-1.5 rounded-xl border border-white/10">{timeLeft.minutes}</span>
+                      <span className="text-blue-500/50">:</span>
+                      <motion.span
+                        key={timeLeft.seconds}
+                        initial={{ scale: 1.15 }}
+                        animate={{ scale: 1 }}
+                        className="bg-red-500/20 border border-red-500/30 px-3 py-1.5 rounded-xl text-red-300"
+                      >
+                        {timeLeft.seconds}
+                      </motion.span>
                     </div>
                   </div>
-                  <div className="text-right hidden xs:block">
-                    <p className="text-blue-600 font-black">$89.99</p>
-                    <p className="text-[10px] text-gray-400 font-bold uppercase">Just now</p>
-                  </div>
                 </div>
-            </div>
-          </div>
-        </section>
-      </div>
 
-      {/* 4. DYNAMIC 3x3 ANIMATED GRID SECTION (Categories) */}
-      <section className="max-w-7xl mx-auto px-6">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
+                <Link
+                  to="/deals"
+                  className="shrink-0 flex items-center gap-3 bg-white text-blue-950 px-8 py-4 rounded-2xl font-black text-sm uppercase tracking-wider shadow-xl hover:scale-105 hover:bg-blue-50 transition-all group"
+                >
+                  Explore Deals
+                  <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                </Link>
+              </div>
+            </div>
+          </motion.section>
+        )}
+      </AnimatePresence>
+
+      {/* ═══ 4. CATEGORIES ════════════════════════════════════════════════════ */}
+      <RevealSection className="max-w-7xl mx-auto px-6 mt-20 md:mt-28">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
           <div>
-            <p className="text-blue-600 font-bold text-xs md:text-sm uppercase tracking-widest">Browse by Category</p>
-            <h2 className="text-3xl md:text-4xl font-black text-blue-950 mt-2">What are you looking for?</h2>
+            <p className="text-blue-600 font-bold text-[11px] uppercase tracking-[0.2em] mb-2">Browse by Category</p>
+            <h2 className="text-3xl md:text-4xl font-black text-blue-950 tracking-tight">What are you<br className="hidden md:block" /> looking for?</h2>
           </div>
-          <Link to="/category/all" className="text-blue-600 font-bold border-b-2 border-blue-600 pb-1 hover:text-blue-800 transition-colors flex items-center">
-            View all <ArrowRight size={16} className="ml-1" />
+          <Link to="/category/all" className="flex items-center gap-2 text-blue-600 font-bold border-b-2 border-blue-600 pb-1 hover:text-blue-800 transition-colors">
+            View all <ArrowRight size={15} />
           </Link>
         </div>
 
         {isLoading ? (
-          <div className="flex justify-center items-center py-10">
-            <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+          <div className="grid grid-cols-3 gap-3 max-w-2xl mx-auto">
+            {[...Array(9)].map((_, i) => <div key={i} className="aspect-square bg-gray-100 rounded-2xl animate-pulse" />)}
           </div>
         ) : displayCategories.length === 0 ? (
-          <div className="text-center py-12 bg-gray-50 rounded-[2rem] border border-gray-100">
+          <div className="text-center py-16 bg-gray-50 rounded-[2rem] border border-gray-100">
             <LayoutGrid size={32} className="mx-auto text-gray-300 mb-3" />
-            <h3 className="text-blue-950 font-black text-base">No Categories Yet</h3>
-            <p className="text-gray-400 font-bold text-xs">Products you add will automatically create categories here.</p>
+            <p className="text-blue-950 font-black text-base">No categories yet</p>
+            <p className="text-gray-400 text-xs mt-1">Add products to generate categories.</p>
           </div>
         ) : (
-          <div className="max-w-3xl mx-auto grid grid-cols-3 gap-3 md:gap-5">
-            {displayCategories.map((cat) => (
-              <motion.div 
-                layout
-                key={cat.slug} 
-                transition={{ type: "spring", stiffness: 200, damping: 20 }}
-                className="z-10"
-              >
-                <Link 
+          <div className="max-w-2xl mx-auto grid grid-cols-3 gap-3 md:gap-4">
+            {displayCategories.map((cat, i) => (
+              <motion.div key={cat.slug} layout transition={{ type: 'spring', stiffness: 250, damping: 22 }}>
+                <Link
                   to={`/category/${cat.slug}`}
-                  className="bg-white p-2 sm:p-3 rounded-2xl border border-gray-100 flex flex-col items-center hover:shadow-lg hover:shadow-blue-900/5 hover:border-blue-100 transition-all cursor-pointer group h-full"
+                  className="group bg-white border border-gray-100 rounded-2xl p-3 flex flex-col items-center hover:shadow-xl hover:shadow-blue-900/6 hover:border-blue-100 hover:-translate-y-1 transition-all h-full"
                 >
-                  <div className="w-14 h-14 sm:w-20 sm:h-20 md:w-24 md:h-24 mb-2 md:mb-3 rounded-xl overflow-hidden bg-gray-50 relative shrink-0">
-                    {cat.image ? (
-                      <img 
-                        src={cat.image} 
-                        alt={cat.name} 
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-300 font-bold text-[8px] md:text-[10px] uppercase tracking-widest bg-gray-100 text-center px-1">
-                        No Image
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-blue-900/0 group-hover:bg-blue-900/10 transition-colors duration-300"></div>
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl overflow-hidden bg-gray-50 relative mb-2 md:mb-3">
+                    {cat.image
+                      ? <img src={cat.image} alt={cat.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                      : <div className="w-full h-full flex items-center justify-center text-gray-300 text-[10px] font-bold bg-gray-100">No img</div>
+                    }
+                    <div className="absolute inset-0 bg-blue-900/0 group-hover:bg-blue-900/8 transition-colors duration-300 rounded-xl" />
                   </div>
-                  
-                  <div className="flex flex-col items-center justify-center flex-grow text-center">
-                    <h3 className="font-black text-blue-950 text-[10px] sm:text-xs line-clamp-1 group-hover:text-blue-600 transition-colors leading-tight">
-                      {cat.name}
-                    </h3>
-                    <p className="hidden sm:block text-[9px] text-gray-400 mt-0.5 font-bold uppercase tracking-widest">
-                      {cat.count} item{cat.count !== 1 ? 's' : ''}
-                    </p>
-                  </div>
+                  <p className="font-black text-blue-950 text-[10px] sm:text-xs line-clamp-1 group-hover:text-blue-600 transition-colors text-center">{cat.name}</p>
+                  <p className="hidden sm:block text-[9px] text-gray-400 mt-0.5 font-bold uppercase tracking-widest">{cat.count} item{cat.count !== 1 ? 's' : ''}</p>
                 </Link>
               </motion.div>
             ))}
           </div>
         )}
-      </section>
+      </RevealSection>
 
-      {/* 5. HOT SALES SECTION */}
-      <section className="max-w-7xl mx-auto px-6 pt-8">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
+      {/* ═══ 5. HOT SALES CAROUSEL ════════════════════════════════════════════ */}
+      <RevealSection className="max-w-7xl mx-auto px-6 mt-20 md:mt-28">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
           <div>
-            <p className="text-orange-600 font-bold text-xs md:text-sm uppercase tracking-widest flex items-center">
-              <Flame size={16} className="mr-1" /> Trending Now
+            <p className="text-orange-500 font-bold text-[11px] uppercase tracking-[0.2em] flex items-center gap-1.5 mb-2">
+              <Flame size={13} /> Trending Now
             </p>
-            <h2 className="text-3xl md:text-4xl font-black text-blue-950 mt-2">Hot Sales</h2>
+            <h2 className="text-3xl md:text-4xl font-black text-blue-950 tracking-tight">Hot Sales</h2>
           </div>
-          <Link to="/category/all" className="text-blue-600 font-bold border-b-2 border-blue-600 pb-1 hover:text-blue-800 transition-colors flex items-center">
-            See what's popular <ArrowRight size={16} className="ml-1" />
+          <Link to="/category/all" className="flex items-center gap-2 text-blue-600 font-bold border-b-2 border-blue-600 pb-1 hover:text-blue-800 transition-colors">
+            See what's popular <ArrowRight size={15} />
           </Link>
         </div>
 
         {isLoading ? (
-          <div className="flex justify-center items-center py-10">
-            <div className="w-8 h-8 border-4 border-orange-200 border-t-orange-600 rounded-full animate-spin"></div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
+            {[...Array(4)].map((_, i) => <SkeletonCard key={i} />)}
           </div>
         ) : hotSales.length === 0 ? (
-           <div className="text-center py-12 bg-gray-50 rounded-[2rem] border border-gray-100">
-             <Flame size={32} className="mx-auto text-gray-300 mb-3" />
-             <p className="text-gray-400 font-bold text-xs">No trending products found.</p>
-           </div>
+          <div className="text-center py-16 bg-gray-50 rounded-[2rem] border border-gray-100">
+            <Flame size={32} className="mx-auto text-gray-300 mb-3" />
+            <p className="text-gray-400 font-bold text-xs">No trending products found.</p>
+          </div>
         ) : (
-          <div className="w-full relative">
-            <Carousel items={hotSales} />
-          </div>
+          <Carousel items={hotSales} />
         )}
-      </section>
+      </RevealSection>
 
-      {/* 6. NEW ARRIVALS SECTION */}
-      <section className="max-w-7xl mx-auto px-6">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
+      {/* ═══ 6. NEW ARRIVALS GRID ═════════════════════════════════════════════ */}
+      <RevealSection className="max-w-7xl mx-auto px-6 mt-20 md:mt-28">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
           <div>
-            <p className="text-blue-600 font-bold text-xs md:text-sm uppercase tracking-widest">Fresh Drops</p>
-            <h2 className="text-3xl md:text-4xl font-black text-blue-950 mt-2">New Arrivals</h2>
+            <p className="text-blue-600 font-bold text-[11px] uppercase tracking-[0.2em] mb-2 flex items-center gap-1.5">
+              <Sparkles size={13} /> Fresh Drops
+            </p>
+            <h2 className="text-3xl md:text-4xl font-black text-blue-950 tracking-tight">New Arrivals</h2>
           </div>
-          <Link to="/category/all" className="text-blue-600 font-bold border-b-2 border-blue-600 pb-1 hover:text-blue-800 transition-colors flex items-center">
-            Shop latest <ArrowRight size={16} className="ml-1" />
+          <Link to="/category/all" className="flex items-center gap-2 text-blue-600 font-bold border-b-2 border-blue-600 pb-1 hover:text-blue-800 transition-colors">
+            Shop latest <ArrowRight size={15} />
           </Link>
         </div>
 
         {isLoading ? (
-          <div className="flex justify-center items-center py-10">
-            <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[...Array(4)].map((_, i) => <SkeletonCard key={i} />)}
           </div>
         ) : newArrivals.length === 0 ? (
-           <div className="text-center py-12 bg-gray-50 rounded-[2rem] border border-gray-100">
-             <Package size={32} className="mx-auto text-gray-300 mb-3" />
-             <p className="text-gray-400 font-bold text-xs">No new products found.</p>
-           </div>
+          <div className="text-center py-16 bg-gray-50 rounded-[2rem] border border-gray-100">
+            <Package size={32} className="mx-auto text-gray-300 mb-3" />
+            <p className="text-gray-400 font-bold text-xs">No new products found.</p>
+          </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
-            {newArrivals.map((product) => (
-              <ProductCard key={`new-${product.id}`} product={product} />
+            {newArrivals.map((product, i) => (
+              <motion.div
+                key={`new-${product.id}`}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: i * 0.08 }}
+              >
+                <ProductCard product={product} />
+              </motion.div>
             ))}
           </div>
         )}
-      </section>
+      </RevealSection>
 
-      {/* 8. TESTIMONIALS */}
+      {/* ═══ 7. LIVE SHOW PROMO ═══════════════════════════════════════════════ */}
+      <RevealSection className="bg-[#f4f6ff] border-y border-blue-100 mt-20 md:mt-28 py-20">
+        <LiveShowSection />
+
+        {/* Live Activity Feed */}
+        <div className="max-w-7xl mx-auto px-6 mt-16 grid grid-cols-1 lg:grid-cols-3 gap-10">
+          {/* Left stats */}
+          <div className="space-y-5">
+            <p className="text-blue-600 font-bold text-[11px] uppercase tracking-[0.2em]">Live Activity</p>
+            <h2 className="text-3xl font-black text-blue-900 leading-tight">What's happening<br />right now</h2>
+            <div className="space-y-4">
+              {[
+                { icon: <Package size={20} className="text-blue-600" />, value: '1,247', label: 'Orders today' },
+                { icon: <Users size={20} className="text-blue-600" />, value: '847', label: 'Live shoppers' },
+                { icon: <TrendingUp size={20} className="text-green-600" />, value: '94%', label: 'Satisfaction rate' },
+              ].map(({ icon, value, label }) => (
+                <div key={label} className="bg-white p-5 rounded-2xl border border-gray-100 flex items-center gap-4 shadow-sm">
+                  <div className="p-3 bg-gray-50 rounded-xl">{icon}</div>
+                  <div>
+                    <p className="text-xl font-black text-blue-950">{value}</p>
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{label}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Right feed */}
+          <div className="lg:col-span-2 space-y-4">
+            <div className="flex justify-between items-center">
+              <p className="flex items-center font-bold text-[11px] tracking-widest text-gray-500 uppercase gap-2">
+                <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" /> Live Feed
+              </p>
+              <p className="text-[10px] text-gray-400 font-bold uppercase">Updates live</p>
+            </div>
+            {[
+              { initials: 'T', color: '#1e3a8a', name: 'Tom H.', product: 'CuisineArt Precision Blender', location: 'San Diego, CA', price: '$89.99', time: 'Just now' },
+              { initials: 'S', color: '#7c3aed', name: 'Sarah K.', product: 'Wireless Noise-Cancelling Headphones', location: 'New York, NY', price: '$149.00', time: '2 min ago' },
+              { initials: 'M', color: '#059669', name: 'Marcus L.', product: 'Smart Fitness Watch Pro', location: 'London, UK', price: '$220.00', time: '5 min ago' },
+            ].map(({ initials, color, name, product, location, price, time }) => (
+              <motion.div
+                key={name}
+                whileHover={{ scale: 1.01 }}
+                className="bg-white p-5 rounded-2xl border border-gray-100 flex items-center justify-between shadow-sm hover:shadow-md transition-all"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-11 h-11 rounded-full flex items-center justify-center text-white text-sm font-black shadow-lg shrink-0" style={{ backgroundColor: color }}>
+                    {initials}
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-800">
+                      <strong className="text-blue-900">{name}</strong>
+                      {' '}purchased{' '}
+                      <span className="text-gray-500 italic">{product}</span>
+                    </p>
+                    <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest mt-0.5">{location}</p>
+                  </div>
+                </div>
+                <div className="text-right shrink-0 hidden sm:block ml-4">
+                  <p className="text-blue-600 font-black">{price}</p>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase">{time}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </RevealSection>
+
+      {/* ═══ 8. TESTIMONIALS ══════════════════════════════════════════════════ */}
       <Testimonials />
 
-      {/* 9. GLOBAL STATS */}
-      <section className="bg-blue-900 text-white py-12 md:py-16">
-        <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12 text-center">
-          <div><h2 className="text-3xl md:text-5xl font-bold">2.4M+</h2><p className="text-blue-200 text-xs md:text-sm opacity-70 mt-1">Happy Customers</p></div>
-          <div><h2 className="text-3xl md:text-5xl font-bold">98.7%</h2><p className="text-blue-200 text-xs md:text-sm opacity-70 mt-1">Satisfaction Rate</p></div>
-          <div><h2 className="text-3xl md:text-5xl font-bold">24hr</h2><p className="text-blue-200 text-xs md:text-sm opacity-70 mt-1">Fast Delivery</p></div>
-          <div><h2 className="text-3xl md:text-5xl font-bold">50K+</h2><p className="text-blue-200 text-xs md:text-sm opacity-70 mt-1">Products</p></div>
+      {/* ═══ 9. STATS BANNER ══════════════════════════════════════════════════ */}
+      <RevealSection>
+        <section className="bg-blue-950 text-white py-16 md:py-20 relative overflow-hidden">
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-[100px]" />
+            <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-indigo-600/10 rounded-full blur-[100px]" />
+          </div>
+          <div className="relative z-10 max-w-7xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+            {[
+              { value: '2400000', suffix: '+', label: 'Happy Customers' },
+              { value: '98.7', suffix: '%', label: 'Satisfaction Rate' },
+              { value: '24', suffix: 'hr', label: 'Fast Delivery' },
+              { value: '50000', suffix: '+', label: 'Products Listed' },
+            ].map(({ value, suffix, label }) => (
+              <div key={label}>
+                <h2 className="text-4xl md:text-6xl font-black tracking-tight">
+                  <AnimatedCounter end={value} suffix={suffix} />
+                </h2>
+                <p className="text-blue-300/70 text-xs md:text-sm mt-2 font-bold uppercase tracking-widest">{label}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      </RevealSection>
+
+      {/* ═══ 10. CTA FOOTER STRIP ═════════════════════════════════════════════ */}
+      <RevealSection className="max-w-7xl mx-auto px-6 py-16 md:py-20">
+        <div className="bg-gradient-to-br from-blue-600 to-blue-800 text-white rounded-[2.5rem] p-10 md:p-16 flex flex-col md:flex-row items-center justify-between gap-8 overflow-hidden relative shadow-2xl shadow-blue-600/20">
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute -top-16 -right-16 w-64 h-64 bg-white/5 rounded-full" />
+            <div className="absolute -bottom-8 -left-8 w-48 h-48 bg-white/5 rounded-full" />
+          </div>
+          <div className="relative z-10">
+            <p className="text-blue-200 text-[11px] font-black uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
+              <Radio size={13} /> Join the experience
+            </p>
+            <h2 className="text-3xl md:text-4xl font-black tracking-tight leading-tight mb-2">
+              Never miss a live deal again.
+            </h2>
+            <p className="text-blue-200 text-sm max-w-md">Watch, shop, and save — exclusive prices only during the broadcast.</p>
+          </div>
+          <div className="relative z-10 flex flex-col sm:flex-row gap-4 shrink-0">
+            <Link
+              to="/live"
+              className="flex items-center gap-3 bg-white text-blue-700 px-7 py-4 rounded-2xl font-black text-sm hover:scale-105 hover:bg-blue-50 transition-all shadow-lg group"
+            >
+              <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
+              Watch Live
+              <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+            </Link>
+            <Link
+              to="/deals"
+              className="flex items-center gap-3 bg-blue-500/30 border border-blue-400/30 text-white px-7 py-4 rounded-2xl font-black text-sm hover:bg-blue-500/50 transition-all"
+            >
+              Browse Deals
+            </Link>
+          </div>
         </div>
-      </section>
+      </RevealSection>
     </main>
   );
 };

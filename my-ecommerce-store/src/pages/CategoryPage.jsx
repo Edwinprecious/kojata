@@ -245,7 +245,7 @@ const CategoryPage = () => {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
                   >
-                    <Link to={`/product/${product.id}`} className="block group relative bg-white rounded-[2rem] p-3 border border-gray-100 hover:border-blue-100 hover:shadow-2xl hover:shadow-blue-900/10 transition-all duration-500 h-full flex flex-col">
+                    <Link to={`/product/${product.id}`} className=" group relative bg-white rounded-[2rem] p-3 border border-gray-100 hover:border-blue-100 hover:shadow-2xl hover:shadow-blue-900/10 transition-all duration-500 h-full flex flex-col">
                       
                       {/* Image Container */}
                       <div className="aspect-square overflow-hidden rounded-3xl bg-gray-50 relative shrink-0">

@@ -18,13 +18,29 @@ urlpatterns = [
     path('orders/<int:pk>/', views.OrderDetailAPIView.as_view(), name='order-detail'),
     path('wishlist/', views.WishlistAPIView.as_view(), name='wishlist-list'),
     path('wishlist/<int:pk>/', views.WishlistDetailAPIView.as_view(), name='wishlist-detail'),
-    
+
+    # ── LIVESTREAM ────────────────────────────────────────────────────────────
+    # Public status endpoint (polled by frontend useYouTube hook every 5 min)
     path('livestream/status/', views.livestream_status, name='livestream-status'),
-    
+
+    # Admin broadcast management
+    path('livestream/broadcasts/', views.LiveStreamBroadcastListView.as_view(), name='broadcast-list'),
+    path('livestream/broadcasts/<int:pk>/', views.LiveStreamBroadcastDetailView.as_view(), name='broadcast-detail'),
+    path('livestream/broadcasts/<int:pk>/toggle/', views.toggle_live, name='broadcast-toggle'),
+    path('livestream/broadcasts/<int:pk>/viewers/', views.update_viewer_count, name='broadcast-viewers'),
+
+    # Comments (public read + post; admin moderation)
+    path('livestream/broadcasts/<int:pk>/comments/', views.LiveStreamCommentListView.as_view(), name='broadcast-comments'),
+    path('livestream/broadcasts/<int:pk>/sync-youtube/', views.sync_youtube_comments, name='broadcast-sync-youtube'),
+    path('livestream/comments/', views.LiveStreamCommentAdminView.as_view(), name='comment-admin-list'),
+    path('livestream/comments/<int:comment_id>/moderate/', views.moderate_comment, name='comment-moderate'),
+    path('livestream/comments/<int:comment_id>/delete/', views.delete_comment, name='comment-delete'),
+    # ─────────────────────────────────────────────────────────────────────────
+
     path('events/', views.EventList.as_view(), name='event-list'),
+     path('events/active/', views.active_event, name='active-event'),
     path('events/<int:pk>/', views.EventDetail.as_view(), name='event-detail'),
-    path('events/active/', views.active_event, name='active-event'),
-    
+
     # --- TRAFFIC ROUTES ---
     path('track-visit/', views.track_visit, name='track-visit'),
     path('traffic-stats/', views.traffic_stats, name='traffic-stats'),

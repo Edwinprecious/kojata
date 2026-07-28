@@ -89,7 +89,7 @@ EMAIL_HOST_USER = os.getenv('EMAIL_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_PASSWORD')
 DEFAULT_FROM_EMAIL = f"ShopWave <{os.getenv('EMAIL_USER')}>"
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
+YOUTUBE_API_KEY = os.environ.get('YOUTUBE_API_KEY', '')
 GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
 
 REST_FRAMEWORK = {

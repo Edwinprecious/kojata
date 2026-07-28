@@ -9,10 +9,24 @@ import {
   ChevronDown, Grid, Laptop, ShoppingBag, Watch,
   Home as HomeIcon, Sparkles, ArrowLeft,
   Footprints, Check, Zap, Calendar, Package,
-  CheckCircle, DollarSign
+  CheckCircle, DollarSign, Radio, MessageCircle,
+  Eye, EyeOff, Pin, Star, RefreshCw,
+  Wifi, WifiOff, Video, Send
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../services/api';
+import {
+  getAllBroadcasts, createBroadcast, updateBroadcast, deleteBroadcast,
+  toggleBroadcastLive, getAdminComments, moderateComment, deleteComment,
+  syncYouTubeComments,
+} from '../services/youtubeApi';
+
+const Youtube = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46A2.78 2.78 0 0 0 1.46 6.42 29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.95 1.95C5.12 20 12 20 12 20s6.88 0 8.59-.47a2.78 2.78 0 0 0 1.95-1.95A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/>
+    <polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02"/>
+  </svg>
+);
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -59,12 +73,26 @@ const AdminDashboard = () => {
   const formDropdownRef = useRef(null);
   const filterDropdownRef = useRef(null);
 
+  // ── Livestream State ──────────────────────────────────────────────────────
+  const [broadcasts, setBroadcasts] = useState([]);
+  const [selectedBroadcast, setSelectedBroadcast] = useState(null);
+  const [broadcastComments, setBroadcastComments] = useState([]);
+  const [loadingBroadcasts, setLoadingBroadcasts] = useState(false);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [showBroadcastForm, setShowBroadcastForm] = useState(false);
+  const [editingBroadcast, setEditingBroadcast] = useState(null);
+  const [broadcastForm, setBroadcastForm] = useState({
+    title: '', video_id: '', description: '', event_id: null, scheduled_at: '',
+  });
+  // ─────────────────────────────────────────────────────────────────────────
+
   const menuItems = [
     { id: 'overview', label: 'Overview', icon: <LayoutDashboard size={20} /> },
     { id: 'orders', label: 'Manage Orders', icon: <Package size={20} /> },
     { id: 'revenue', label: 'Revenue & Profits', icon: <DollarSign size={20} /> },
     { id: 'products', label: 'Manage Products', icon: <PackageSearch size={20} /> },
     { id: 'events', label: 'Events & Sales', icon: <Zap size={20} /> },
+    { id: 'livestream', label: 'Livestream', icon: <Radio size={20} /> },
     { id: 'tracking', label: 'Traffic & Visits', icon: <Activity size={20} /> },
   ];
 
@@ -84,7 +112,124 @@ const AdminDashboard = () => {
     if (activeTab === 'events') fetchEvents();
     if (['tracking', 'overview', 'revenue'].includes(activeTab)) fetchTrafficStats();
     if (activeTab === 'orders') fetchAdminOrders();
+    if (activeTab === 'livestream') { fetchBroadcasts(); fetchEvents(); }
   }, [activeTab]);
+
+  // ── Livestream Functions ──────────────────────────────────────────────────
+  const fetchBroadcasts = async () => {
+    setLoadingBroadcasts(true);
+    try {
+      const data = await getAllBroadcasts();
+      setBroadcasts(data);
+    } catch {
+      toast.error('Failed to load broadcasts');
+    } finally {
+      setLoadingBroadcasts(false);
+    }
+  };
+
+  const fetchBroadcastComments = async (broadcastId) => {
+    setLoadingComments(true);
+    try {
+      const data = await getAdminComments(broadcastId);
+      setBroadcastComments(data);
+    } catch {
+      toast.error('Failed to load comments');
+    } finally {
+      setLoadingComments(false);
+    }
+  };
+
+  const handleToggleLive = async (broadcast) => {
+    const newState = !broadcast.is_live;
+    try {
+      await toggleBroadcastLive(broadcast.id, newState);
+      toast.success(newState ? '🔴 Stream is now LIVE!' : '⚫ Stream ended');
+      fetchBroadcasts();
+    } catch {
+      toast.error('Failed to toggle live status');
+    }
+  };
+
+  const handleSaveBroadcast = async () => {
+    try {
+      const payload = {
+        ...broadcastForm,
+        event_id: broadcastForm.event_id || null,
+        scheduled_at: broadcastForm.scheduled_at || null,
+      };
+      if (editingBroadcast) {
+        await updateBroadcast(editingBroadcast.id, payload);
+        toast.success('Broadcast updated');
+      } else {
+        await createBroadcast(payload);
+        toast.success('Broadcast created');
+      }
+      setShowBroadcastForm(false);
+      setEditingBroadcast(null);
+      setBroadcastForm({ title: '', video_id: '', description: '', event_id: null, scheduled_at: '' });
+      fetchBroadcasts();
+    } catch {
+      toast.error('Failed to save broadcast');
+    }
+  };
+
+  const handleDeleteBroadcast = async (id) => {
+    if (!window.confirm('Delete this broadcast? This will also delete all its comments.')) return;
+    try {
+      await deleteBroadcast(id);
+      toast.success('Broadcast deleted');
+      if (selectedBroadcast?.id === id) setSelectedBroadcast(null);
+      fetchBroadcasts();
+    } catch {
+      toast.error('Failed to delete broadcast');
+    }
+  };
+
+  const handleModerateComment = async (commentId, action) => {
+    try {
+      await moderateComment(commentId, action);
+      setBroadcastComments((prev) =>
+        prev.map((c) => (c.id === commentId ? { ...c, ...action } : c))
+      );
+    } catch {
+      toast.error('Action failed');
+    }
+  };
+
+  const handleDeleteComment = async (commentId) => {
+    try {
+      await deleteComment(commentId);
+      setBroadcastComments((prev) => prev.filter((c) => c.id !== commentId));
+      toast.success('Comment deleted');
+    } catch {
+      toast.error('Failed to delete comment');
+    }
+  };
+
+  const handleSyncYouTube = async (broadcastId) => {
+    try {
+      const result = await syncYouTubeComments(broadcastId);
+      toast.success(result.message || 'Synced YouTube comments');
+      fetchBroadcastComments(broadcastId);
+    } catch (err) {
+      const msg = err?.response?.data?.detail || 'YouTube sync failed';
+      toast.error(msg);
+    }
+  };
+
+  const openBroadcastEdit = (b) => {
+    setEditingBroadcast(b);
+    setBroadcastForm({
+      title: b.title,
+      video_id: b.video_id,
+      description: b.description || '',
+      event_id: b.event?.id || null,
+      scheduled_at: b.scheduled_at ? b.scheduled_at.slice(0, 16) : '',
+    });
+    setShowBroadcastForm(true);
+  };
+  // ─────────────────────────────────────────────────────────────────────────
 
   const fetchData = async () => {
     try {
@@ -712,6 +857,304 @@ const AdminDashboard = () => {
                         </tbody>
                       </table>
                     </div>
+                  </div>
+                )}
+
+       
+                {/* ─────────────────────────────────────────────────────── */}
+                {/* TAB: LIVESTREAM                                          */}
+                {/* ─────────────────────────────────────────────────────── */}
+                {activeTab === 'livestream' && (
+                  <div className="space-y-8">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                      <div>
+                        <h1 className="text-2xl md:text-3xl font-black text-blue-950 mb-1 flex items-center gap-3">
+                          <Radio size={28} className="text-red-500" />
+                          Livestream Control
+                        </h1>
+                        <p className="text-sm text-gray-400 font-bold">Manage broadcasts, comments, and YouTube sync.</p>
+                      </div>
+                      <button
+                        onClick={() => { setEditingBroadcast(null); setBroadcastForm({ title: '', video_id: '', description: '', event_id: null, scheduled_at: '' }); setShowBroadcastForm(true); }}
+                        className="flex items-center gap-2 bg-blue-600 text-white px-5 py-3 rounded-2xl font-bold text-sm hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20"
+                      >
+                        <Plus size={16} /> New Broadcast
+                      </button>
+                    </div>
+
+                    {/* Broadcast list */}
+                    {loadingBroadcasts ? (
+                      <div className="flex items-center justify-center h-40 text-gray-400 gap-3">
+                        <RefreshCw size={20} className="animate-spin" /> Loading broadcasts…
+                      </div>
+                    ) : broadcasts.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center h-48 text-gray-400 border-2 border-dashed border-gray-200 rounded-3xl">
+                        <Video size={32} className="mb-3 opacity-30" />
+                        <p className="font-bold text-sm">No broadcasts yet</p>
+                        <p className="text-xs mt-1">Create your first broadcast above.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {broadcasts.map((b) => (
+                          <div key={b.id} className={`rounded-3xl border p-5 transition-all ${b.is_live ? 'border-red-300 bg-red-50' : 'border-gray-100 bg-white'}`}>
+                            <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                              <div className="flex items-center gap-4">
+                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${b.is_live ? 'bg-red-100' : 'bg-gray-100'}`}>
+                                  {b.is_live
+                                    ? <Wifi size={22} className="text-red-500" />
+                                    : <WifiOff size={22} className="text-gray-400" />
+                                  }
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <h3 className="font-black text-blue-950 text-sm">{b.title}</h3>
+                                    {b.is_live && (
+                                      <span className="bg-red-600 text-white text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest animate-pulse">
+                                        🔴 LIVE
+                                      </span>
+                                    )}
+                                    {b.event && (
+                                      <span className="bg-orange-100 text-orange-600 text-[9px] px-2 py-0.5 rounded-full font-black uppercase">
+                                        ⚡ {b.event.name}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-3">
+                                    {b.video_id
+                                      ? <a href={`https://www.youtube.com/watch?v=${b.video_id}`} target="_blank" rel="noopener noreferrer" className="text-red-500 hover:underline flex items-center gap-1"><Youtube size={12} /> {b.video_id}</a>
+                                      : <span className="text-gray-300">No video ID</span>
+                                    }
+                                    <span className="text-gray-300">·</span>
+                                    <span>{b.comment_count || 0} comments</span>
+                                    {b.viewer_count > 0 && <><span className="text-gray-300">·</span><span>{b.viewer_count} viewers</span></>}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {/* Go Live / End Stream toggle */}
+                                <button
+                                  onClick={() => handleToggleLive(b)}
+                                  className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs transition-all ${
+                                    b.is_live
+                                      ? 'bg-gray-800 text-white hover:bg-gray-700'
+                                      : 'bg-red-600 text-white hover:bg-red-700 shadow-lg shadow-red-600/20'
+                                  }`}
+                                >
+                                  {b.is_live ? <><WifiOff size={14} /> End Stream</> : <><Radio size={14} /> Go Live</>}
+                                </button>
+                                {/* Comments panel toggle */}
+                                <button
+                                  onClick={() => {
+                                    if (selectedBroadcast?.id === b.id) {
+                                      setSelectedBroadcast(null);
+                                    } else {
+                                      setSelectedBroadcast(b);
+                                      fetchBroadcastComments(b.id);
+                                    }
+                                  }}
+                                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 font-bold text-xs"
+                                >
+                                  <MessageCircle size={14} /> Comments
+                                </button>
+                                <button onClick={() => openBroadcastEdit(b)} className="p-2 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">
+                                  <Edit size={14} />
+                                </button>
+                                <button onClick={() => handleDeleteBroadcast(b.id)} className="p-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-colors">
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Comment management panel */}
+                            <AnimatePresence>
+                              {selectedBroadcast?.id === b.id && (
+                                <motion.div
+                                  initial={{ opacity: 0, height: 0 }}
+                                  animate={{ opacity: 1, height: 'auto' }}
+                                  exit={{ opacity: 0, height: 0 }}
+                                  className="mt-5 overflow-hidden"
+                                >
+                                  <div className="border-t border-gray-100 pt-5 space-y-4">
+                                    <div className="flex items-center justify-between">
+                                      <h4 className="font-black text-xs text-gray-500 uppercase tracking-widest">
+                                        Comments ({broadcastComments.length})
+                                      </h4>
+                                      <div className="flex gap-2">
+                                        <button
+                                          onClick={() => handleSyncYouTube(b.id)}
+                                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 font-bold text-xs"
+                                        >
+                                          <Youtube size={12} /> Sync YouTube
+                                        </button>
+                                        <button onClick={() => fetchBroadcastComments(b.id)} className="p-1.5 rounded-xl bg-gray-100 text-gray-500 hover:bg-gray-200">
+                                          <RefreshCw size={12} />
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {loadingComments ? (
+                                      <div className="text-center py-6 text-gray-400 text-xs">Loading…</div>
+                                    ) : broadcastComments.length === 0 ? (
+                                      <div className="text-center py-6 text-gray-400 text-xs">No comments yet.</div>
+                                    ) : (
+                                      <div className="space-y-2 max-h-80 overflow-y-auto">
+                                        {broadcastComments.map((c) => (
+                                          <div key={c.id} className={`flex items-start gap-3 p-3 rounded-2xl text-xs ${c.is_hidden ? 'bg-gray-50 opacity-50' : c.is_highlighted ? 'bg-blue-50 border border-blue-100' : c.is_pinned ? 'bg-yellow-50 border border-yellow-100' : 'bg-gray-50'}`}>
+                                            <div className="flex-1 min-w-0">
+                                              <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                                                <span className="font-black text-blue-800">{c.display_name}</span>
+                                                {c.source === 'youtube' && <span className="bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded text-[9px] font-bold">YT</span>}
+                                                {c.is_pinned && <Pin size={10} className="text-yellow-500" />}
+                                                {c.is_highlighted && <Star size={10} className="text-blue-500" />}
+                                                {c.is_hidden && <EyeOff size={10} className="text-gray-400" />}
+                                                <span className="text-gray-300 ml-auto">{new Date(c.created_at).toLocaleTimeString()}</span>
+                                              </div>
+                                              <p className="text-gray-600 break-words">{c.message}</p>
+                                            </div>
+                                            <div className="flex items-center gap-1 shrink-0">
+                                              <button
+                                                title={c.is_pinned ? 'Unpin' : 'Pin'}
+                                                onClick={() => handleModerateComment(c.id, { is_pinned: !c.is_pinned })}
+                                                className={`p-1.5 rounded-lg transition-colors ${c.is_pinned ? 'bg-yellow-100 text-yellow-600' : 'bg-gray-100 text-gray-400 hover:bg-yellow-100 hover:text-yellow-600'}`}
+                                              >
+                                                <Pin size={12} />
+                                              </button>
+                                              <button
+                                                title={c.is_highlighted ? 'Remove highlight' : 'Highlight'}
+                                                onClick={() => handleModerateComment(c.id, { is_highlighted: !c.is_highlighted })}
+                                                className={`p-1.5 rounded-lg transition-colors ${c.is_highlighted ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400 hover:bg-blue-100 hover:text-blue-600'}`}
+                                              >
+                                                <Star size={12} />
+                                              </button>
+                                              <button
+                                                title={c.is_hidden ? 'Unhide' : 'Hide'}
+                                                onClick={() => handleModerateComment(c.id, { is_hidden: !c.is_hidden })}
+                                                className={`p-1.5 rounded-lg transition-colors ${c.is_hidden ? 'bg-gray-200 text-gray-600' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+                                              >
+                                                {c.is_hidden ? <Eye size={12} /> : <EyeOff size={12} />}
+                                              </button>
+                                              <button
+                                                title="Delete"
+                                                onClick={() => handleDeleteComment(c.id)}
+                                                className="p-1.5 rounded-lg bg-red-50 text-red-400 hover:bg-red-100 transition-colors"
+                                              >
+                                                <Trash2 size={12} />
+                                              </button>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* YouTube API info card */}
+                    <div className="bg-blue-50 border border-blue-100 rounded-3xl p-6 flex gap-4">
+                      <Youtube size={24} className="text-red-500 shrink-0 mt-0.5" />
+                      <div className="text-sm">
+                        <p className="font-black text-blue-900 mb-1">YouTube Integration</p>
+                        <p className="text-blue-700 text-xs leading-relaxed">
+                          To enable YouTube comment sync, add <code className="bg-blue-100 px-1 py-0.5 rounded font-mono">YOUTUBE_API_KEY=your_key</code> to your <code className="bg-blue-100 px-1 py-0.5 rounded font-mono">.env</code> file.
+                          Get a free key from <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer" className="underline font-bold">Google Cloud Console</a> → Enable YouTube Data API v3.
+                          Works with 0 subscribers — no channel requirements for reading live chat comments.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Broadcast form modal */}
+                    <AnimatePresence>
+                      {showBroadcastForm && (
+                        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-blue-950/40 backdrop-blur-sm">
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden"
+                          >
+                            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+                              <h2 className="text-xl font-black text-blue-950">
+                                {editingBroadcast ? 'Edit Broadcast' : 'New Broadcast'}
+                              </h2>
+                              <button onClick={() => setShowBroadcastForm(false)} className="p-2 rounded-full bg-gray-50 hover:bg-gray-100 text-gray-400">
+                                <X size={18} />
+                              </button>
+                            </div>
+                            <div className="p-6 space-y-4">
+                              <div>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Stream Title *</label>
+                                <input
+                                  value={broadcastForm.title}
+                                  onChange={(e) => setBroadcastForm({ ...broadcastForm, title: e.target.value })}
+                                  placeholder="e.g. Weekend Flash Sale Live Show"
+                                  className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">YouTube Video ID</label>
+                                <input
+                                  value={broadcastForm.video_id}
+                                  onChange={(e) => setBroadcastForm({ ...broadcastForm, video_id: e.target.value })}
+                                  placeholder="e.g. dQw4w9WgXcQ"
+                                  className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                                />
+                                <p className="text-[10px] text-gray-400 mt-1">Find this in your YouTube Studio stream URL or the watch?v= parameter.</p>
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Description</label>
+                                <textarea
+                                  value={broadcastForm.description}
+                                  onChange={(e) => setBroadcastForm({ ...broadcastForm, description: e.target.value })}
+                                  rows={3}
+                                  placeholder="What's happening in this stream?"
+                                  className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 resize-none"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Link Flash Sale Event</label>
+                                <select
+                                  value={broadcastForm.event_id || ''}
+                                  onChange={(e) => setBroadcastForm({ ...broadcastForm, event_id: e.target.value ? Number(e.target.value) : null })}
+                                  className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                                >
+                                  <option value="">No event linked</option>
+                                  {events.map((ev) => (
+                                    <option key={ev.id} value={ev.id}>{ev.name}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Scheduled Date/Time (optional)</label>
+                                <input
+                                  type="datetime-local"
+                                  value={broadcastForm.scheduled_at}
+                                  onChange={(e) => setBroadcastForm({ ...broadcastForm, scheduled_at: e.target.value })}
+                                  className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                                />
+                              </div>
+                            </div>
+                            <div className="p-6 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+                              <button onClick={() => setShowBroadcastForm(false)} className="px-5 py-2.5 rounded-2xl font-bold text-sm text-gray-600 bg-white border border-gray-200 hover:bg-gray-100">
+                                Cancel
+                              </button>
+                              <button
+                                onClick={handleSaveBroadcast}
+                                disabled={!broadcastForm.title}
+                                className="px-6 py-2.5 rounded-2xl font-bold text-sm bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-600/20 disabled:opacity-40"
+                              >
+                                {editingBroadcast ? 'Save Changes' : 'Create Broadcast'}
+                              </button>
+                            </div>
+                          </motion.div>
+                        </div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 )}
 

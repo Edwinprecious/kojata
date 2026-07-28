@@ -1,9 +1,11 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Radio, Users, Zap, ShoppingCart, ArrowRight } from 'lucide-react';
+import { useYouTube } from '../../hooks/useYouTube';
 
 const LiveShowSection = () => {
   const navigate = useNavigate();
+   const { isLive, title, viewerCount } = useYouTube();
 
   return (
     <section className="py-20 px-6 max-w-7xl mx-auto font-caslon">
