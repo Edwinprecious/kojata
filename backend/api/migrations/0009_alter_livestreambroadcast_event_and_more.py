@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('api', '0008 livestreambroadcast livestreamcomment '),
+        ('api', '0008_livestreambroadcast_livestreamcomment'),
     ]
 
     operations = [
