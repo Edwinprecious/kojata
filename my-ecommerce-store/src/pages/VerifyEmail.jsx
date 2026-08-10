@@ -17,7 +17,7 @@ const VerifyEmail = () => {
     const verify = async () => {
       try {
         // 1. FIXED: Assigned to 'response' so we can access response.data
-        const response = await axios.post(`http://localhost:8000/api/verify-email/${uid}/${token}/`);
+        const response = await axios.post(`/api/verify-email/${uid}/${token}/`);
 
         // 2. AUTO-LOGIN LOGIC
         // Uses the tokens returned by our updated 'High Conversion' backend view

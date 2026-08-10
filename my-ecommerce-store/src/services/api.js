@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api', // Your Django API URL
+  baseURL: '/api', // Relative URL: works on localhost in dev, and on the real domain in production
   headers: {
     'Content-Type': 'application/json',
   },

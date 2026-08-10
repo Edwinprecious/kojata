@@ -46,7 +46,7 @@ export const postComment = async (broadcastId, data) => {
   if (token) headers.Authorization = `Bearer ${token}`;
 
   const response = await axios.post(
-    `http://localhost:8000/api/livestream/broadcasts/${broadcastId}/comments/`,
+    `/api/livestream/broadcasts/${broadcastId}/comments/`,
     data,
     { headers }
   );
@@ -121,4 +121,4 @@ export const moderateComment = async (commentId, data) => {
 /** Permanently delete a comment. */
 export const deleteComment = async (commentId) => {
   await api.delete(`/livestream/comments/${commentId}/delete/`);
-}; 
+};

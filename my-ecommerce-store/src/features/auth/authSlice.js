@@ -4,8 +4,8 @@ const initialState = {
   user: JSON.parse(localStorage.getItem('user')) || null,
   token: localStorage.getItem('token') || null,
   isAuthenticated: !!localStorage.getItem('token'),
-  // Check if the cached user's username is 'admin' on initial load
-  isAdmin: JSON.parse(localStorage.getItem('user'))?.username === 'admin' || false,
+  // Check the cached user's real backend permission on initial load
+  isAdmin: JSON.parse(localStorage.getItem('user'))?.is_staff === true,
   loading: false,
 };
 
@@ -22,8 +22,8 @@ const authSlice = createSlice({
       if (accessToken) {
         state.user = user;
         state.token = accessToken;
-        // Verify if the authenticating user is explicitly 'admin'
-        state.isAdmin = user.username === 'admin'; 
+        // Verify admin status using the real backend permission flag
+        state.isAdmin = user.is_staff === true; 
         state.isAuthenticated = true;
         
         localStorage.setItem('user', JSON.stringify(user));

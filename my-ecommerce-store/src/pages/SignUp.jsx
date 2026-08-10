@@ -22,7 +22,7 @@ const SignUp = () => {
   const handleGoogleResponse = async (response) => {
     const loadingToast = toast.loading("Connecting to Google...");
     try {
-      const res = await axios.post('http://localhost:8000/api/google-auth/', {
+      const res = await axios.post('/api/google-auth/', {
         token: response.credential 
       });
       
@@ -72,7 +72,7 @@ const SignUp = () => {
     const loadingToast = toast.loading("Sending verification email...");
 
     try {
-      const response = await axios.post('http://localhost:8000/api/register/', {
+      const response = await axios.post('/api/register/', {
         username: formData.username,
         email: formData.email,
         password: formData.password

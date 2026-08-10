@@ -16,7 +16,7 @@ const SignIn = () => {
   const handleGoogleResponse = async (response) => {
     const loadingToast = toast.loading("Connecting to Google...");
     try {
-      const res = await axios.post('http://localhost:8000/api/google-auth/', {
+      const res = await axios.post('/api/google-auth/', {
         token: response.credential 
       });
       
@@ -58,11 +58,17 @@ const SignIn = () => {
     const loadingToast = toast.loading('Authenticating...');
 
     try {
-      const response = await axios.post('http://localhost:8000/api/token/', { username, password });
+      const response = await axios.post('/api/token/', { username, password });
       if (response.data && response.data.access) {
+        // Fetch the real user profile (including is_staff) so admin
+        // status is based on actual backend permissions, not the typed username
+        const profileRes = await axios.get('/api/profile/', {
+          headers: { Authorization: `Bearer ${response.data.access}` }
+        });
+
         dispatch(setCredentials({ 
           ...response.data, 
-          user: { username: username } 
+          user: profileRes.data
         })); 
         // Removed syncCartWithBackend() here as well
         
