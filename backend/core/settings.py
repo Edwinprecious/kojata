@@ -4,10 +4,12 @@ from dotenv import load_dotenv
 from datetime import timedelta
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-SECRET_KEY = 'django-insecure-b70acfs@9s*=!qq0f88v9+)m=)tt1d*h0sv@y&6^wb3lrk-=g@'
-DEBUG = True
+load_dotenv()
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
+DEBUG = os.getenv('DJANGO_DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '.loca.lt', '.trycloudflare.com']
+ALLOWED_HOSTS = ['kojata.shop', 'www.kojata.shop', 'localhost', '127.0.0.1']
 
 INSTALLED_APPS = [
     'corsheaders',
@@ -33,7 +35,11 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWED_ORIGINS = [
+    "https://kojata.shop",
+    "https://www.kojata.shop",
+]
+
 ROOT_URLCONF = 'core.urls'
 
 TEMPLATES = [
@@ -56,11 +62,11 @@ WSGI_APPLICATION = 'core.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'shopwave_db',
-        'USER': 'shopwave_user',
-        'PASSWORD': 'strongpassword',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'NAME': os.getenv('DB_NAME'),
+        'USER': os.getenv('DB_USER'),
+        'PASSWORD': os.getenv('DB_PASSWORD'),
+        'HOST': os.getenv('DB_HOST'),
+        'PORT': os.getenv('DB_PORT'),
     }
 }
 
@@ -76,10 +82,10 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-load_dotenv()
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
