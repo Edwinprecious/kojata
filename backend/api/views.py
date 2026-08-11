@@ -224,7 +224,7 @@ class RegisterView(generics.CreateAPIView):
 
         token = default_token_generator.make_token(user)
         uid = urlsafe_base64_encode(force_bytes(user.pk))
-        verify_url = f"http://localhost:5173/verify-email/{uid}/{token}"
+        verify_url = f"{settings.FRONTEND_URL}/verify-email/{uid}/{token}"
 
         send_mail(
             "Verify your Account", 
