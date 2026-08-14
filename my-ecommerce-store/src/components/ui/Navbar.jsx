@@ -7,10 +7,25 @@ import {
   ShoppingCart, Video, Search, ChevronDown, 
   Menu, X, Laptop, ShoppingBag, 
   Watch, Home as HomeIcon, LogOut, User, Sparkles, Grid, Shield,
-  Footprints 
+  Footprints, Tag 
 } from 'lucide-react';
 import { toggleCart } from '../../features/cart/CartSlice';
 import toast from 'react-hot-toast';
+import api from '../../services/api';
+import { slugify } from '../../utils/slug';
+
+// Cosmetic icon/color palette cycled through for whatever categories exist in
+// the database. Categories are no longer hardcoded, so we can't hand-pick an
+// icon per category name anymore -- we just cycle through a nice palette.
+const CATEGORY_STYLES = [
+  { icon: <Laptop size={16}/>, color: 'text-orange-500' },
+  { icon: <ShoppingBag size={16}/>, color: 'text-pink-500' },
+  { icon: <Watch size={16}/>, color: 'text-blue-500' },
+  { icon: <HomeIcon size={16}/>, color: 'text-green-500' },
+  { icon: <Sparkles size={16}/>, color: 'text-purple-500' },
+  { icon: <Footprints size={16}/>, color: 'text-gray-500' },
+  { icon: <Tag size={16}/>, color: 'text-red-500' },
+];
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -19,6 +34,7 @@ const Navbar = () => {
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [isMobileProfileOpen, setIsMobileProfileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [navCategories, setNavCategories] = useState([]);
   
   const dropdownRef = useRef(null);
 
@@ -36,6 +52,26 @@ const Navbar = () => {
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Pull categories straight from the database instead of hardcoding them, so
+  // any category an admin adds shows up here immediately.
+  useEffect(() => {
+    let isMounted = true;
+    api.get('/categories/')
+      .then((res) => {
+        if (!isMounted) return;
+        const list = Array.isArray(res.data) ? res.data : (res.data?.results || []);
+        const mapped = list.map((cat, i) => ({
+          id: cat.id,
+          name: cat.name,
+          slug: slugify(cat.name),
+          ...CATEGORY_STYLES[i % CATEGORY_STYLES.length],
+        }));
+        setNavCategories(mapped);
+      })
+      .catch((err) => console.error('Failed to load categories:', err));
+    return () => { isMounted = false; };
   }, []);
 
   const handleLogout = () => {
@@ -58,15 +94,6 @@ const Navbar = () => {
       setSearchQuery('');
     }
   };
-
-  const navCategories = [
-    { name: 'Electronics', slug: 'electronics', icon: <Laptop size={16}/>, color: 'text-orange-500' },
-    { name: 'Fashion', slug: 'fashion', icon: <ShoppingBag size={16}/>, color: 'text-pink-500' },
-    { name: 'Accessories', slug: 'accessories', icon: <Watch size={16}/>, color: 'text-blue-500' },
-    { name: 'Home & Decor', slug: 'home', icon: <HomeIcon size={16}/>, color: 'text-green-500' },
-    { name: 'Beauty', slug: 'beauty', icon: <Sparkles size={16}/>, color: 'text-purple-500' },
-    { name: 'Footwear', slug: 'footwear', icon: <Footprints size={16}/>, color: 'text-gray-500' },
-  ];
 
   const closeMenu = () => {
     setIsMenuOpen(false);

@@ -6,6 +6,7 @@ import { Filter, Star, SearchX, ShoppingCart, X, RotateCcw, Tag } from 'lucide-r
 import { addToCart } from '../features/cart/CartSlice';
 import toast from 'react-hot-toast';
 import api from '../services/api';
+import { slugify } from '../utils/slug';
 
 const CategoryPage = () => {
   const { slug } = useParams();
@@ -19,6 +20,7 @@ const CategoryPage = () => {
   
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [categoriesLoaded, setCategoriesLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   // Filter States
@@ -26,29 +28,49 @@ const CategoryPage = () => {
   const [localFilters, setLocalFilters] = useState({ minPrice: '', maxPrice: '', minRating: 0, inStock: false });
   const [appliedFilters, setAppliedFilters] = useState({ minPrice: '', maxPrice: '', minRating: 0, inStock: false });
 
-  // Map URL slugs to exact database category names
-  const categoryMap = {
-    'home': 'Home & Decor',
-    'electronics': 'Electronics',
-    'fashion': 'Fashion'
-  };
-
   const isAll = !slug || slug === 'all';
-  const dbCategoryName = categoryMap[slug] || slug;
 
-  let categoryTitle = isAll ? "All Collections" : (categoryMap[slug] || slug.charAt(0).toUpperCase() + slug.slice(1));
+  // Match the URL slug back to a real category from the database, instead of
+  // a hardcoded {slug: name} lookup table -- this way any category an admin
+  // creates works immediately, with no code changes needed.
+  const matchedCategory = isAll
+    ? null
+    : categories.find((c) => slugify(c.name) === slug) || null;
+
+  // Exact DB category name to send to the backend filter. Once categories
+  // have loaded, if nothing matches, fall back to the raw slug so a direct
+  // category-name link (or a category whose name happens to equal its slug)
+  // still works; the product query will simply return no results otherwise.
+  const dbCategoryName = matchedCategory ? matchedCategory.name : slug;
+
+  let categoryTitle = isAll
+    ? "All Collections"
+    : (matchedCategory ? matchedCategory.name : (slug ? slug.charAt(0).toUpperCase() + slug.slice(1) : ''));
   if (searchQuery) categoryTitle = `Search: "${searchQuery}"`;
 
-  // Fetch from the Backend utilizing URL Params
+  // Fetch the category list once so slugs can be matched to real categories.
   useEffect(() => {
-    const fetchData = async () => {
+    api.get('/categories/')
+      .then((res) => {
+        setCategories(Array.isArray(res.data) ? res.data : (res.data?.results || []));
+      })
+      .catch((error) => console.error("Error fetching categories:", error))
+      .finally(() => setCategoriesLoaded(true));
+  }, []);
+
+  // Fetch products once we know which category (if any) we're filtering by.
+  // For a specific category we wait for categoriesLoaded so we don't fire an
+  // extra request with a guessed/incorrect category name.
+  useEffect(() => {
+    if (!isAll && !categoriesLoaded) return;
+
+    const fetchProducts = async () => {
       setIsLoading(true);
       try {
         const params = new URLSearchParams();
         if (searchQuery) params.append('search', searchQuery);
-        
-        // Pass the mapped exact name to the backend instead of the slug
-        if (dbCategoryName && dbCategoryName !== 'all') {
+
+        if (!isAll && dbCategoryName) {
           params.append('category', dbCategoryName);
         }
 
@@ -57,22 +79,17 @@ const CategoryPage = () => {
         if (appliedFilters.minRating > 0) params.append('rating', appliedFilters.minRating);
         if (appliedFilters.inStock) params.append('in_stock', 'true');
 
-        const [prodRes, catRes] = await Promise.all([
-          api.get(`/products/?${params.toString()}`),
-          api.get('/categories/')
-        ]);
-        
+        const prodRes = await api.get(`/products/?${params.toString()}`);
         setProducts(Array.isArray(prodRes.data) ? prodRes.data : (prodRes.data?.results || []));
-        setCategories(Array.isArray(catRes.data) ? catRes.data : (catRes.data?.results || []));
       } catch (error) {
-        console.error("Error fetching store data:", error);
+        console.error("Error fetching products:", error);
       } finally {
         setIsLoading(false);
       }
     };
-    
-    fetchData();
-  }, [slug, dbCategoryName, searchQuery, appliedFilters]);
+
+    fetchProducts();
+  }, [isAll, dbCategoryName, searchQuery, appliedFilters, categoriesLoaded]);
 
   const getCategoryName = (productCat) => {
     if (typeof productCat === 'object') return productCat.name;

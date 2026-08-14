@@ -14,6 +14,7 @@ import ProductCard from '../features/products/ProductCard';
 import Carousel from '../components/common/Carousel';
 import api from '../services/api';
 import { getLiveStatus } from '../services/youtubeApi';
+import { slugify } from '../utils/slug';
 
 // ─── Animated Counter ─────────────────────────────────────────────────────────
 const AnimatedCounter = ({ end, suffix = '', duration = 2000 }) => {
@@ -108,7 +109,7 @@ const Home = () => {
           products.forEach(p => {
             const name = p.category_name || (typeof p.category === 'object' ? p.category?.name : '');
             if (!name) return;
-            const slug = name.toLowerCase().replace('&', 'and').replace(/\s+/g, ' ').trim();
+            const slug = slugify(name);
             if (!catMap[slug]) catMap[slug] = { name, slug, count: 0, image: null };
             catMap[slug].count++;
             if (!catMap[slug].image && p.image) catMap[slug].image = p.image;
