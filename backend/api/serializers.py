@@ -10,9 +10,22 @@ from .models import (
 
 
 class CategorySerializer(serializers.ModelSerializer):
+    # Populated by the annotation in CategoryList (views.py). Falls back to a
+    # live count so the serializer still works without that annotation, e.g.
+    # when nested in another serializer or on a POST create response.
+    # NOTE: Product.category uses related_name="products", so the reverse
+    # accessor is obj.products -- there is no obj.product_set here.
+    product_count = serializers.SerializerMethodField()
+
     class Meta:
         model = Category
         fields = '__all__'
+
+    def get_product_count(self, obj):
+        annotated = getattr(obj, 'product_count_annotated', None)
+        if annotated is not None:
+            return annotated
+        return obj.products.count()
 
 
 class ProductSerializer(serializers.ModelSerializer):

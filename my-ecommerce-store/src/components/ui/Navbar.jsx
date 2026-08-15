@@ -5,32 +5,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { logout } from '../../features/auth/authSlice';
 import { 
   ShoppingCart, Video, Search, ChevronDown, 
-  Menu, X, Laptop, ShoppingBag, 
-  Watch, Home as HomeIcon, LogOut, User, Sparkles, Shield,
-  Footprints, Tag 
+  Menu, X, Home as HomeIcon, LogOut, User, Shield, ArrowRight 
 } from 'lucide-react';
 import { toggleCart } from '../../features/cart/CartSlice';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { slugify } from '../../utils/slug';
+import { getCategoryStyle, formatCategoryName } from '../../utils/categoryStyle';
 import CategoryMegaMenu from './CategoryMegaMenu';
-
-// Cosmetic icon/color palette cycled through for whatever categories exist in
-// the database. Categories are no longer hardcoded, so we can't hand-pick an
-// icon per category name anymore -- we just cycle through a nice palette.
-const CATEGORY_STYLES = [
-  { icon: <Laptop size={16}/>, color: 'text-orange-500' },
-  { icon: <ShoppingBag size={16}/>, color: 'text-pink-500' },
-  { icon: <Watch size={16}/>, color: 'text-blue-500' },
-  { icon: <HomeIcon size={16}/>, color: 'text-green-500' },
-  { icon: <Sparkles size={16}/>, color: 'text-purple-500' },
-  { icon: <Footprints size={16}/>, color: 'text-gray-500' },
-  { icon: <Tag size={16}/>, color: 'text-red-500' },
-];
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false); 
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [isMobileProfileOpen, setIsMobileProfileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -74,11 +59,11 @@ const Navbar = () => {
       .then((res) => {
         if (!isMounted) return;
         const list = Array.isArray(res.data) ? res.data : (res.data?.results || []);
-        const mapped = list.map((cat, i) => ({
+        const mapped = list.map((cat) => ({
           id: cat.id,
-          name: cat.name,
+          name: formatCategoryName(cat.name),
           slug: slugify(cat.name),
-          ...CATEGORY_STYLES[i % CATEGORY_STYLES.length],
+          ...getCategoryStyle(cat.name),
         }));
         setNavCategories(mapped);
       })
@@ -109,7 +94,6 @@ const Navbar = () => {
 
   const closeMenu = () => {
     setIsMenuOpen(false);
-    setIsDropdownOpen(false);
     setIsProfileDropdownOpen(false);
     setIsMobileProfileOpen(false);
   };
@@ -273,56 +257,40 @@ const Navbar = () => {
               </Link>
             </div>
 
-            <div className="border border-gray-100 rounded-2xl overflow-hidden mt-2 bg-gray-50 flex flex-col shrink-0">
-              <div className="flex items-center justify-between font-bold text-blue-900">
-                <Link 
-                  to="/category/all" 
-                  onClick={closeMenu} 
-                  className="p-4 flex-1 hover:text-blue-600 transition-colors"
-                >
-                  Browse Categories 
-                </Link>
-                <button 
-                  type="button"
-                  aria-expanded={isDropdownOpen}
-                  aria-label={isDropdownOpen ? "Hide categories" : "Show categories"}
-                  onClick={() => setIsDropdownOpen(!isDropdownOpen)} 
-                  className="p-4 border-l border-gray-200 hover:bg-gray-100 transition-colors"
-                >
-                  <ChevronDown size={18} className={`transition-transform duration-300 ${isDropdownOpen ? 'rotate-180' : ''}`} />
-                </button>
-              </div>
-              
-              <AnimatePresence>
-                {isDropdownOpen && (
-                  <motion.div 
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="bg-white overflow-hidden"
-                  >
-                    {navCategories.length === 0 ? (
-                      <p className="p-4 border-t border-gray-50 text-sm font-semibold text-gray-400">
-                        No categories yet.
-                      </p>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 border-t border-gray-50">
-                        {navCategories.map((cat) => (
-                          <Link 
-                            key={cat.id ?? cat.slug}
-                            to={`/category/${cat.slug}`}
-                            onClick={closeMenu}
-                            className="min-h-[52px] px-3 py-2.5 rounded-xl flex items-center gap-3 min-w-0 text-sm font-semibold text-gray-700 hover:bg-blue-50 active:bg-blue-100 transition-colors"
-                          >
-                            <span className={`${cat.color} bg-gray-50 p-2 rounded-lg shrink-0`}>{cat.icon}</span>
-                            <span className="capitalize whitespace-nowrap overflow-hidden text-ellipsis">{cat.name}</span>
-                          </Link>
-                        ))}
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+            <div className="mt-2 shrink-0">
+              <p className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-3 px-1">
+                Shop by category
+              </p>
+
+              {navCategories.length === 0 ? (
+                <p className="text-sm font-semibold text-gray-400 px-1 py-4">
+                  No categories yet.
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {navCategories.map((cat) => (
+                    <Link
+                      key={cat.id ?? cat.slug}
+                      to={`/category/${cat.slug}`}
+                      onClick={closeMenu}
+                      className="flex flex-col items-start gap-2 p-3 min-h-[92px] rounded-2xl border border-gray-100 bg-white hover:border-blue-200 hover:bg-blue-50/60 active:bg-blue-100 transition-colors"
+                    >
+                      <span className={`${cat.color} bg-gray-50 p-2 rounded-lg`}>{cat.icon}</span>
+                      <span className="text-sm font-semibold text-gray-700 leading-snug line-clamp-2">
+                        {cat.name}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+
+              <Link
+                to="/category/all"
+                onClick={closeMenu}
+                className="mt-3 w-full min-h-[52px] px-4 rounded-2xl bg-blue-50 text-blue-700 font-bold text-sm flex items-center justify-center gap-2 hover:bg-blue-100 active:bg-blue-200 transition-colors"
+              >
+                View all categories <ArrowRight size={16} />
+              </Link>
             </div>
 
             <div className="mt-4 pt-4 border-t border-gray-100 flex flex-col gap-3 pb-6 shrink-0">

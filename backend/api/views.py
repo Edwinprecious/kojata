@@ -105,7 +105,14 @@ class DealList(generics.ListAPIView):
         return Product.objects.none()
 
 class CategoryList(generics.ListCreateAPIView):
-    queryset = Category.objects.all()
+    # annotate() resolves the count in a single aggregate query for the whole
+    # list rather than one COUNT per category, so adding categories doesn't
+    # add queries. Count('products') matches related_name on Product.category.
+    # order_by('name') also gives the navbar and category index a stable,
+    # alphabetical order instead of raw insertion order.
+    queryset = Category.objects.annotate(
+        product_count_annotated=Count('products')
+    ).order_by('name')
     serializer_class = CategorySerializer
     permission_classes = [IsAdminOrReadOnly]
 
