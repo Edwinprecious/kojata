@@ -38,7 +38,7 @@ const CategoryMegaMenu = ({ categories = [] }) => {
   return (
     <div
       ref={containerRef}
-      className="static lg:relative py-2"
+      className="static py-2"
       onMouseEnter={open}
       onMouseLeave={scheduleClose}
     >
@@ -69,7 +69,7 @@ const CategoryMegaMenu = ({ categories = [] }) => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
             transition={{ duration: 0.18 }}
-            className="absolute left-0 right-0 top-20 mx-auto w-full max-w-5xl bg-white border border-gray-100 rounded-2xl shadow-xl shadow-blue-900/5 p-6 z-50"
+            className="absolute left-0 right-0 top-20 w-[calc(100%-2rem)] max-w-7xl mx-auto max-h-[calc(100dvh-6rem)] overflow-y-auto overscroll-contain bg-white border border-gray-100 rounded-2xl shadow-xl shadow-blue-900/5 p-6 z-50"
           >
             <p className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-4">
               Shop by category
@@ -80,19 +80,19 @@ const CategoryMegaMenu = ({ categories = [] }) => {
                 No categories yet. Add one from the admin dashboard.
               </p>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-2">
+              <div className="grid grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-x-6 gap-y-2">
                 {categories.map((cat) => (
                   <Link
                     key={cat.id ?? cat.slug}
                     to={`/category/${cat.slug}`}
                     role="menuitem"
                     onClick={() => setIsOpen(false)}
-                    className="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-gray-600 hover:bg-blue-50/60 hover:text-blue-700 transition-colors"
+                    className="group flex items-center gap-3 min-w-0 rounded-xl px-3 py-2.5 text-sm font-semibold text-gray-600 hover:bg-blue-50/60 hover:text-blue-700 transition-colors"
                   >
                     <span className={`${cat.color} bg-gray-50 p-2 rounded-lg shrink-0`}>
                       {cat.icon}
                     </span>
-                    <span className="capitalize truncate">{cat.name}</span>
+                    <span className="capitalize whitespace-nowrap overflow-hidden text-ellipsis">{cat.name}</span>
                   </Link>
                 ))}
               </div>

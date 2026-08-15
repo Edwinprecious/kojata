@@ -283,6 +283,9 @@ const Navbar = () => {
                   Browse Categories 
                 </Link>
                 <button 
+                  type="button"
+                  aria-expanded={isDropdownOpen}
+                  aria-label={isDropdownOpen ? "Hide categories" : "Show categories"}
                   onClick={() => setIsDropdownOpen(!isDropdownOpen)} 
                   className="p-4 border-l border-gray-200 hover:bg-gray-100 transition-colors"
                 >
@@ -296,21 +299,27 @@ const Navbar = () => {
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
-                    className="bg-white"
+                    className="bg-white overflow-hidden"
                   >
-                    <div className="flex flex-col max-h-60 overflow-y-auto overscroll-contain">
-                      {navCategories.map((cat) => (
-                        <Link 
-                          key={cat.slug}
-                          to={`/category/${cat.slug}`}
-                          onClick={closeMenu}
-                          className="p-4 border-t border-gray-50 flex items-center gap-3 text-sm font-semibold hover:bg-blue-50 transition-colors"
-                        >
-                          <span className={`${cat.color} bg-gray-50 p-2 rounded-lg`}>{cat.icon}</span>
-                          <span className="capitalize">{cat.name}</span>
-                        </Link>
-                      ))}
-                    </div>
+                    {navCategories.length === 0 ? (
+                      <p className="p-4 border-t border-gray-50 text-sm font-semibold text-gray-400">
+                        No categories yet.
+                      </p>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 border-t border-gray-50">
+                        {navCategories.map((cat) => (
+                          <Link 
+                            key={cat.id ?? cat.slug}
+                            to={`/category/${cat.slug}`}
+                            onClick={closeMenu}
+                            className="min-h-[52px] px-3 py-2.5 rounded-xl flex items-center gap-3 min-w-0 text-sm font-semibold text-gray-700 hover:bg-blue-50 active:bg-blue-100 transition-colors"
+                          >
+                            <span className={`${cat.color} bg-gray-50 p-2 rounded-lg shrink-0`}>{cat.icon}</span>
+                            <span className="capitalize whitespace-nowrap overflow-hidden text-ellipsis">{cat.name}</span>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
