@@ -1,5 +1,5 @@
-import React from 'react';
-import { ShoppingCart, Star, Tag, Heart } from 'lucide-react';
+import React, { useState } from 'react';
+import { ShoppingCart, Star, Tag, Heart, ImageOff } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
@@ -39,6 +39,11 @@ const ProductCard = ({ product = {} }) => {
 
   // Dynamic Rating extraction
   const rating = parseFloat(p.rating) || 0.0;
+
+  // via.placeholder.com was retired, so the old fallback URL 404'd and left
+  // raw alt text on the card. Render a local placeholder block instead.
+  const [imageFailed, setImageFailed] = useState(false);
+  const showImage = Boolean(p.image) && !imageFailed;
 
   return (
     <motion.div 
@@ -86,11 +91,20 @@ const ProductCard = ({ product = {} }) => {
       )}
 
       <div className="aspect-square rounded-2xl bg-gray-50 mb-6 overflow-hidden shrink-0 relative z-10">
-        <img 
-          src={p.image || "https://via.placeholder.com/400"} 
-          alt={p.name || "Product Image"} 
-          className={`w-full h-full object-cover transition-transform duration-700 ${!isAdmin ? 'group-hover:scale-110' : ''}`}
-        />
+        {showImage ? (
+          <img 
+            src={p.image} 
+            alt={p.name || "Product image"} 
+            loading="lazy"
+            onError={() => setImageFailed(true)}
+            className={`w-full h-full object-cover transition-transform duration-700 ${!isAdmin ? 'group-hover:scale-110' : ''}`}
+          />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-gray-300">
+            <ImageOff size={28} strokeWidth={1.5} />
+            <span className="text-[10px] font-bold uppercase tracking-widest">No image</span>
+          </div>
+        )}
       </div>
 
       <div className="space-y-2 flex-1 flex flex-col">

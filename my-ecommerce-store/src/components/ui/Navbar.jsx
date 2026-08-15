@@ -6,13 +6,14 @@ import { logout } from '../../features/auth/authSlice';
 import { 
   ShoppingCart, Video, Search, ChevronDown, 
   Menu, X, Laptop, ShoppingBag, 
-  Watch, Home as HomeIcon, LogOut, User, Sparkles, Grid, Shield,
+  Watch, Home as HomeIcon, LogOut, User, Sparkles, Shield,
   Footprints, Tag 
 } from 'lucide-react';
 import { toggleCart } from '../../features/cart/CartSlice';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { slugify } from '../../utils/slug';
+import CategoryMegaMenu from './CategoryMegaMenu';
 
 // Cosmetic icon/color palette cycled through for whatever categories exist in
 // the database. Categories are no longer hardcoded, so we can't hand-pick an
@@ -30,13 +31,15 @@ const CATEGORY_STYLES = [
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false); 
-  const [isCategoryOpen, setIsCategoryOpen] = useState(false); 
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [isMobileProfileOpen, setIsMobileProfileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [navCategories, setNavCategories] = useState([]);
   
-  const dropdownRef = useRef(null);
+  // NOTE: this ref is now actually attached (see the profile dropdown wrapper
+  // below). Previously it was declared but never bound to an element, so
+  // dropdownRef.current stayed null and the click-outside handler never fired.
+  const profileRef = useRef(null);
 
   const { isAuthenticated, isAdmin } = useSelector((state) => state.auth);
   const { items } = useSelector(state => state.cart);
@@ -45,13 +48,22 @@ const Navbar = () => {
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsCategoryOpen(false);
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
         setIsProfileDropdownOpen(false);
       }
     };
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setIsProfileDropdownOpen(false);
+        setIsMenuOpen(false);
+      }
+    };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
   }, []);
 
   // Pull categories straight from the database instead of hardcoding them, so
@@ -98,7 +110,6 @@ const Navbar = () => {
   const closeMenu = () => {
     setIsMenuOpen(false);
     setIsDropdownOpen(false);
-    setIsCategoryOpen(false);
     setIsProfileDropdownOpen(false);
     setIsMobileProfileOpen(false);
   };
@@ -108,7 +119,13 @@ const Navbar = () => {
       <div className="max-w-7xl mx-auto h-full flex items-center justify-between gap-4">
         
         <div className="flex items-center gap-2 md:gap-4">
-          <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="lg:hidden p-2 -ml-2 text-blue-900">
+          <button 
+            type="button"
+            aria-expanded={isMenuOpen}
+            aria-label={isMenuOpen ? "Close menu" : "Open menu"}
+            onClick={() => setIsMenuOpen(!isMenuOpen)} 
+            className="lg:hidden p-2 -ml-2 text-blue-900"
+          >
             {isMenuOpen ? <X size={28} /> : <Menu size={28} />}
           </button>
 
@@ -138,47 +155,7 @@ const Navbar = () => {
               <HomeIcon size={16} /> Home
             </Link>
 
-            <div 
-              className="relative py-2" 
-              onMouseEnter={() => setIsCategoryOpen(true)}
-              onMouseLeave={() => setIsCategoryOpen(false)}
-            >
-              <Link 
-                to="/category/all"
-                className={`flex items-center gap-1.5 transition-colors uppercase tracking-wider ${isCategoryOpen ? 'text-blue-600' : 'hover:text-blue-600'}`}
-              >
-                <Grid size={16} />
-                Categories
-                <ChevronDown 
-                  size={16} 
-                  className={`transition-transform duration-200 ${isCategoryOpen ? 'rotate-180 text-blue-600' : ''}`} 
-                />
-              </Link>
-
-              <AnimatePresence>
-                {isCategoryOpen && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 10 }}
-                    transition={{ duration: 0.2 }}
-                    className="absolute top-full left-0 mt-2 w-56 bg-white border border-gray-100 rounded-2xl shadow-xl shadow-blue-900/5 py-2 overflow-hidden z-50"
-                  >
-                    {navCategories.map((cat) => (
-                      <Link
-                        key={cat.slug}
-                        to={`/category/${cat.slug}`}
-                        onClick={() => setIsCategoryOpen(false)}
-                        className="px-5 py-3 text-sm font-semibold text-gray-600 hover:bg-blue-50/50 hover:text-blue-700 transition-colors flex items-center gap-3"
-                      >
-                        <span className={`${cat.color} bg-gray-50 p-2 rounded-lg`}>{cat.icon}</span>
-                        {cat.name}
-                      </Link>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+            <CategoryMegaMenu categories={navCategories} />
 
             <Link to="/deals" className="hover:text-blue-600 transition-colors">Deals</Link>
             <Link to="/live" className="text-red-600 hover:text-red-700 transition-colors flex items-center">
@@ -208,11 +185,19 @@ const Navbar = () => {
                 
                 {/* Desktop Profile Dropdown */}
                 <div 
+                  ref={profileRef}
                   className="relative py-2" 
                   onMouseEnter={() => setIsProfileDropdownOpen(true)}
                   onMouseLeave={() => setIsProfileDropdownOpen(false)}
                 >
-                  <button className="p-2 bg-gray-50 text-blue-900 rounded-xl hover:bg-blue-100 transition-all flex items-center gap-1.5">
+                  <button 
+                    type="button"
+                    aria-expanded={isProfileDropdownOpen}
+                    aria-haspopup="true"
+                    aria-label="Account menu"
+                    onClick={() => setIsProfileDropdownOpen((v) => !v)}
+                    className="p-2 bg-gray-50 text-blue-900 rounded-xl hover:bg-blue-100 transition-all flex items-center gap-1.5"
+                  >
                     <User size={20} />
                     <ChevronDown size={14} className={`transition-transform duration-200 ${isProfileDropdownOpen ? 'rotate-180 text-blue-600' : ''}`} />
                   </button>
@@ -322,7 +307,7 @@ const Navbar = () => {
                           className="p-4 border-t border-gray-50 flex items-center gap-3 text-sm font-semibold hover:bg-blue-50 transition-colors"
                         >
                           <span className={`${cat.color} bg-gray-50 p-2 rounded-lg`}>{cat.icon}</span>
-                          {cat.name}
+                          <span className="capitalize">{cat.name}</span>
                         </Link>
                       ))}
                     </div>
